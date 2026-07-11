@@ -1,0 +1,568 @@
+name: ${CONTAINER_PREFIX}
+services:
+  supabase-kong:
+    image: kong/kong:3.9.1
+    entrypoint:
+    - /bin/bash
+    - /home/kong/kong-entrypoint.sh
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - kong
+      - health
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+    - KONG_PORT_MAPS=443:8000
+    - JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - KONG_DATABASE=off
+    - KONG_DECLARATIVE_CONFIG=/usr/local/kong/kong.yml
+    - KONG_DNS_ORDER=LAST,A,CNAME
+    - KONG_DNS_NOT_FOUND_TTL=1
+    - KONG_PLUGINS=request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function
+    - KONG_NGINX_PROXY_PROXY_BUFFER_SIZE=160k
+    - KONG_NGINX_PROXY_PROXY_BUFFERS=64 160k
+    - KONG_PROXY_ACCESS_LOG=/dev/stdout combined
+    - SUPABASE_ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+    - SUPABASE_SERVICE_KEY=${SERVICE_SUPABASESERVICE_KEY}
+    - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY}
+    - DASHBOARD_USERNAME=${SERVICE_USER_ADMIN}
+    - DASHBOARD_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    - KONG_STORAGE_CONNECT_TIMEOUT=${KONG_STORAGE_CONNECT_TIMEOUT}
+    - KONG_STORAGE_WRITE_TIMEOUT=${KONG_STORAGE_WRITE_TIMEOUT}
+    - KONG_STORAGE_READ_TIMEOUT=${KONG_STORAGE_READ_TIMEOUT}
+    - KONG_STORAGE_REQUEST_BUFFERING=${KONG_STORAGE_REQUEST_BUFFERING}
+    - KONG_STORAGE_RESPONSE_BUFFERING=${KONG_STORAGE_RESPONSE_BUFFERING}
+    volumes:
+    - type: bind
+      source: ./files/volumes/api/kong-entrypoint.sh
+      target: /home/kong/kong-entrypoint.sh
+      read_only: true
+    - type: bind
+      source: ./files/volumes/api/kong.yml
+      target: /home/kong/temp.yml
+      read_only: true
+  supabase-studio:
+    image: supabase/studio:2026.06.03-sha-0bca601
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - fetch('http://127.0.0.1:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    environment:
+    - HOSTNAME=0.0.0.0
+    - STUDIO_PG_META_URL=http://supabase-meta:8080
+    - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - POSTGRES_HOST=${POSTGRES_HOST}
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_USER_READ_WRITE=postgres
+    - PGRST_DB_SCHEMAS=${PGRST_DB_SCHEMAS}
+    - PGRST_DB_MAX_ROWS=${PGRST_DB_MAX_ROWS}
+    - PGRST_DB_EXTRA_SEARCH_PATH=${PGRST_DB_EXTRA_SEARCH_PATH}
+    - DEFAULT_ORGANIZATION_NAME=${STUDIO_DEFAULT_ORGANIZATION}
+    - DEFAULT_PROJECT_NAME=${STUDIO_DEFAULT_PROJECT}
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL}
+    - SUPABASE_ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+    - SUPABASE_SERVICE_KEY=${SERVICE_SUPABASESERVICE_KEY}
+    - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY}
+    - AUTH_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - PG_META_CRYPTO_KEY=${SERVICE_PASSWORD_PGMETACRYPTO}
+    - LOGFLARE_API_KEY=${SERVICE_PASSWORD_LOGFLARE}
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${SERVICE_PASSWORD_LOGFLARE}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${SERVICE_PASSWORD_LOGFLAREPRIVATE}
+    - LOGFLARE_URL=http://supabase-analytics:4000
+    - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_PUBLIC_URL}
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+    - NEXT_PUBLIC_ENABLE_LOGS=true
+    - ENABLED_FEATURES_LOGS_ALL=true
+    - NEXT_ANALYTICS_BACKEND_PROVIDER=postgres
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - SNIPPETS_MANAGEMENT_FOLDER=/app/snippets
+    - EDGE_FUNCTIONS_MANAGEMENT_FOLDER=/app/edge-functions
+    volumes:
+    - ./files/volumes/snippets:/app/snippets
+    - ./files/volumes/functions:/app/edge-functions
+  supabase-db:
+    image: supabase/postgres:17.6.1.136
+    healthcheck:
+      test: pg_isready -U postgres -h 127.0.0.1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      supabase-vector:
+        condition: service_healthy
+    command:
+    - postgres
+    - -c
+    - config_file=/etc/postgresql/postgresql.conf
+    - -c
+    - log_min_messages=fatal
+    environment:
+    - POSTGRES_HOST=/var/run/postgresql
+    - PGPORT=${POSTGRES_PORT}
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - PGPASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - PGDATABASE=${POSTGRES_DB}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - JWT_EXP=${JWT_EXPIRY}
+    volumes:
+    - supabase-db-data:/var/lib/postgresql/data
+    - type: bind
+      source: ./files/volumes/db/realtime.sql
+      target: /docker-entrypoint-initdb.d/migrations/99-realtime.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/_supabase.sql
+      target: /docker-entrypoint-initdb.d/migrations/97-_supabase.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/pooler.sql
+      target: /docker-entrypoint-initdb.d/migrations/99-pooler.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/webhooks.sql
+      target: /docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/roles.sql
+      target: /docker-entrypoint-initdb.d/init-scripts/99-roles.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/jwt.sql
+      target: /docker-entrypoint-initdb.d/init-scripts/99-jwt.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/logs.sql
+      target: /docker-entrypoint-initdb.d/migrations/99-logs.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/graphql.sql
+      target: /docker-entrypoint-initdb.d/migrations/99-graphql.sql
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/cron.sql
+      target: /docker-entrypoint-initdb.d/migrations/99-cron.sql
+      read_only: true
+    - supabase-db-config:/etc/postgresql-custom
+  supabase-analytics:
+    image: supabase/logflare:1.31.2
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - http://127.0.0.1:4000/health
+      timeout: 5s
+      interval: 5s
+      retries: 10
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+    - LOGFLARE_NODE_HOST=127.0.0.1
+    - DB_USERNAME=supabase_admin
+    - DB_DATABASE=_supabase
+    - DB_HOSTNAME=${POSTGRES_HOSTNAME}
+    - DB_PORT=${POSTGRES_PORT}
+    - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - DB_SCHEMA=_analytics
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${SERVICE_PASSWORD_LOGFLARE}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${SERVICE_PASSWORD_LOGFLAREPRIVATE}
+    - LOGFLARE_SINGLE_TENANT=true
+    - LOGFLARE_SUPABASE_MODE=true
+    - POSTGRES_BACKEND_URL=postgresql://supabase_admin:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/_supabase
+    - POSTGRES_BACKEND_SCHEMA=_analytics
+    - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
+  supabase-vector:
+    image: timberio/vector:0.53.0-alpine
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://supabase-vector:9001/health
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    volumes:
+    - type: bind
+      source: ./files/volumes/logs/vector.yml
+      target: /etc/vector/vector.yml
+      read_only: true
+    - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro
+    environment:
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${SERVICE_PASSWORD_LOGFLARE}
+    command:
+    - --config
+    - /etc/vector/vector.yml
+  supabase-rest:
+    image: postgrest/postgrest:v14.12
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    environment:
+    - PGRST_DB_URI=postgres://authenticator:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/${POSTGRES_DB}
+    - PGRST_DB_SCHEMAS=${PGRST_DB_SCHEMAS}
+    - PGRST_DB_MAX_ROWS=${PGRST_DB_MAX_ROWS}
+    - PGRST_DB_EXTRA_SEARCH_PATH=${PGRST_DB_EXTRA_SEARCH_PATH}
+    - PGRST_DB_ANON_ROLE=anon
+    - PGRST_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - PGRST_DB_USE_LEGACY_GUCS=false
+    - PGRST_ADMIN_SERVER_HOST=localhost
+    - PGRST_ADMIN_SERVER_PORT=3001
+    - PGRST_APP_SETTINGS_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY}
+    command: postgrest
+    healthcheck:
+      test:
+      - CMD
+      - postgrest
+      - --ready
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  supabase-auth:
+    image: supabase/gotrue:v2.189.0
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://127.0.0.1:9999/health
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+    - GOTRUE_API_HOST=0.0.0.0
+    - GOTRUE_API_PORT=9999
+    - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
+    - GOTRUE_DB_DRIVER=postgres
+    - GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/${POSTGRES_DB}
+    - GOTRUE_SITE_URL=${SUPABASE_PUBLIC_URL}
+    - GOTRUE_URI_ALLOW_LIST=${ADDITIONAL_REDIRECT_URLS}
+    - GOTRUE_DISABLE_SIGNUP=${DISABLE_SIGNUP}
+    - GOTRUE_JWT_ADMIN_ROLES=service_role
+    - GOTRUE_JWT_AUD=authenticated
+    - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+    - GOTRUE_JWT_EXP=${JWT_EXPIRY}
+    - GOTRUE_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - GOTRUE_JWT_ISSUER=${SUPABASE_PUBLIC_URL}/auth/v1
+    - GOTRUE_EXTERNAL_EMAIL_ENABLED=${ENABLE_EMAIL_SIGNUP}
+    - GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=${ENABLE_ANONYMOUS_USERS}
+    - GOTRUE_MAILER_AUTOCONFIRM=${ENABLE_EMAIL_AUTOCONFIRM}
+    - GOTRUE_SMTP_ADMIN_EMAIL=${SMTP_ADMIN_EMAIL}
+    - GOTRUE_SMTP_HOST=${SMTP_HOST}
+    - GOTRUE_SMTP_PORT=${SMTP_PORT}
+    - GOTRUE_SMTP_USER=${SMTP_USER}
+    - GOTRUE_SMTP_PASS=${SMTP_PASS}
+    - GOTRUE_SMTP_SENDER_NAME=${SMTP_SENDER_NAME}
+    - GOTRUE_MAILER_URLPATHS_INVITE=${MAILER_URLPATHS_INVITE}
+    - GOTRUE_MAILER_URLPATHS_CONFIRMATION=${MAILER_URLPATHS_CONFIRMATION}
+    - GOTRUE_MAILER_URLPATHS_RECOVERY=${MAILER_URLPATHS_RECOVERY}
+    - GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE=${MAILER_URLPATHS_EMAIL_CHANGE}
+    - GOTRUE_MAILER_TEMPLATES_INVITE=${MAILER_TEMPLATES_INVITE}
+    - GOTRUE_MAILER_TEMPLATES_CONFIRMATION=${MAILER_TEMPLATES_CONFIRMATION}
+    - GOTRUE_MAILER_TEMPLATES_RECOVERY=${MAILER_TEMPLATES_RECOVERY}
+    - GOTRUE_MAILER_TEMPLATES_MAGIC_LINK=${MAILER_TEMPLATES_MAGIC_LINK}
+    - GOTRUE_MAILER_TEMPLATES_EMAIL_CHANGE=${MAILER_TEMPLATES_EMAIL_CHANGE}
+    - GOTRUE_MAILER_SUBJECTS_CONFIRMATION=${MAILER_SUBJECTS_CONFIRMATION}
+    - GOTRUE_MAILER_SUBJECTS_RECOVERY=${MAILER_SUBJECTS_RECOVERY}
+    - GOTRUE_MAILER_SUBJECTS_MAGIC_LINK=${MAILER_SUBJECTS_MAGIC_LINK}
+    - GOTRUE_MAILER_SUBJECTS_EMAIL_CHANGE=${MAILER_SUBJECTS_EMAIL_CHANGE}
+    - GOTRUE_MAILER_SUBJECTS_INVITE=${MAILER_SUBJECTS_INVITE}
+    - GOTRUE_EXTERNAL_PHONE_ENABLED=${ENABLE_PHONE_SIGNUP}
+    - GOTRUE_SMS_AUTOCONFIRM=${ENABLE_PHONE_AUTOCONFIRM}
+  realtime-dev:
+    image: supabase/realtime:v2.102.3
+    container_name: ${CONTAINER_PREFIX}.supabase-realtime
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sSfL
+      - --head
+      - -o
+      - /dev/null
+      - -H
+      - 'Authorization: Bearer ${SERVICE_SUPABASEANON_KEY}'
+      - http://127.0.0.1:4000/api/tenants/realtime-dev/health
+      timeout: 5s
+      interval: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+    - PORT=4000
+    - DB_HOST=${POSTGRES_HOSTNAME}
+    - DB_PORT=${POSTGRES_PORT}
+    - DB_USER=supabase_admin
+    - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - DB_NAME=${POSTGRES_DB}
+    - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
+    - DB_ENC_KEY=${REALTIME_DB_ENC_KEY}
+    - API_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+    - METRICS_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - DNS_NODES=''
+    - RLIMIT_NOFILE=10000
+    - APP_NAME=realtime
+    - SEED_SELF_HOST=true
+    - LOG_LEVEL=error
+    - RUN_JANITOR=true
+    - JANITOR_INTERVAL=60000
+    - DISABLE_HEALTHCHECK_LOGGING=true
+    command: 'sh -c "/app/bin/migrate && /app/bin/realtime eval ''Realtime.Release.seeds(Realtime.Repo)'' && /app/bin/server"
+
+      '
+  supabase-minio:
+    image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+    environment:
+    - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
+    - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
+    command: server --console-address ":9001" /data
+    healthcheck:
+      test:
+      - CMD
+      - mc
+      - ready
+      - local
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    volumes:
+    - supabase-minio-data:/data
+  minio-createbucket:
+    image: minio/mc
+    restart: 'no'
+    environment:
+    - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
+    - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
+    - GLOBAL_S3_BUCKET=${GLOBAL_S3_BUCKET}
+    depends_on:
+      supabase-minio:
+        condition: service_healthy
+    entrypoint:
+    - /bin/sh
+    - /entrypoint.sh
+    volumes:
+    - type: bind
+      source: ./files/entrypoint.sh
+      target: /entrypoint.sh
+      read_only: true
+  supabase-storage:
+    image: supabase/storage-api:v1.60.4
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-rest:
+        condition: service_started
+      imgproxy:
+        condition: service_started
+      supabase-minio:
+        condition: service_healthy
+      minio-createbucket:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --no-verbose
+      - --tries=1
+      - --spider
+      - http://127.0.0.1:5000/status
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+    - SERVER_PORT=5000
+    - SERVER_REGION=local
+    - REGION=${REGION}
+    - MULTI_TENANT=false
+    - AUTH_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - DATABASE_URL=postgres://supabase_storage_admin:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/${POSTGRES_DB}
+    - DB_INSTALL_ROLES=false
+    - STORAGE_BACKEND=s3
+    - STORAGE_S3_BUCKET=${GLOBAL_S3_BUCKET}
+    - STORAGE_S3_ENDPOINT=http://supabase-minio:9000
+    - STORAGE_S3_FORCE_PATH_STYLE=true
+    - STORAGE_S3_REGION=us-east-1
+    - AWS_ACCESS_KEY_ID=${SERVICE_USER_MINIO}
+    - AWS_SECRET_ACCESS_KEY=${SERVICE_PASSWORD_MINIO}
+    - S3_PROTOCOL_ACCESS_KEY_ID=${S3_PROTOCOL_ACCESS_KEY_ID}
+    - S3_PROTOCOL_ACCESS_KEY_SECRET=${S3_PROTOCOL_ACCESS_KEY_SECRET}
+    - UPLOAD_FILE_SIZE_LIMIT=524288000
+    - UPLOAD_FILE_SIZE_LIMIT_STANDARD=524288000
+    - UPLOAD_SIGNED_URL_EXPIRATION_TIME=120
+    - TUS_URL_PATH=/upload/resumable
+    - TUS_URL_EXPIRY_MS=3600000
+    - ENABLE_IMAGE_TRANSFORMATION=true
+    - IMGPROXY_URL=http://imgproxy:8080
+    - IMGPROXY_REQUEST_TIMEOUT=15
+    - DATABASE_SEARCH_PATH=storage
+    - NODE_ENV=production
+    - REQUEST_ALLOW_X_FORWARDED_PATH=true
+    - ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+    - SERVICE_KEY=${SERVICE_SUPABASESERVICE_KEY}
+    - POSTGREST_URL=http://supabase-rest:3000
+    - PGRST_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - STORAGE_PUBLIC_URL=${SUPABASE_PUBLIC_URL}
+    - TENANT_ID=${STORAGE_TENANT_ID}
+    volumes:
+    - ./files/volumes/storage:/var/lib/storage
+  imgproxy:
+    image: darthsim/imgproxy:v3.30.1
+    healthcheck:
+      test:
+      - CMD
+      - imgproxy
+      - health
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+    - IMGPROXY_BIND=:8080
+    - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/
+    - IMGPROXY_USE_ETAG=true
+    - IMGPROXY_ENABLE_WEBP_DETECTION=${IMGPROXY_ENABLE_WEBP_DETECTION}
+    - IMGPROXY_AUTO_WEBP=${IMGPROXY_AUTO_WEBP}
+    - IMGPROXY_MAX_SRC_RESOLUTION=16.8
+    volumes:
+    - ./files/volumes/storage:/var/lib/storage
+  supabase-meta:
+    image: supabase/postgres-meta:v0.96.6
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    environment:
+    - PG_META_PORT=8080
+    - PG_META_DB_HOST=${POSTGRES_HOSTNAME}
+    - PG_META_DB_PORT=${POSTGRES_PORT}
+    - PG_META_DB_NAME=${POSTGRES_DB}
+    - PG_META_DB_USER=supabase_admin
+    - PG_META_DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - CRYPTO_KEY=${SERVICE_PASSWORD_PGMETACRYPTO}
+  supabase-edge-functions:
+    image: supabase/edge-runtime:v1.74.0
+    depends_on:
+      supabase-kong:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - echo
+      - Edge Functions is healthy
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+    - JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL}
+    - SUPABASE_ANON_KEY=${SERVICE_SUPABASEANON_KEY}
+    - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_SUPABASESERVICE_KEY}
+    - SUPABASE_PUBLISHABLE_KEYS={"default":"${SUPABASE_PUBLISHABLE_KEY}"}
+    - SUPABASE_SECRET_KEYS={"default":"${SUPABASE_SECRET_KEY}"}
+    - SUPABASE_DB_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/${POSTGRES_DB}
+    - VERIFY_JWT=${FUNCTIONS_VERIFY_JWT}
+    volumes:
+    - ./files/volumes/functions:/home/deno/functions
+    - deno-cache:/root/.cache/deno
+    - type: bind
+      source: ./files/volumes/functions/main/index.ts
+      target: /home/deno/functions/main/index.ts
+    - type: bind
+      source: ./files/volumes/functions/hello/index.ts
+      target: /home/deno/functions/hello/index.ts
+    command:
+    - start
+    - --main-service
+    - /home/deno/functions/main
+  supabase-supavisor:
+    image: supabase/supavisor:2.9.5
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sSfL
+      - -o
+      - /dev/null
+      - http://127.0.0.1:4000/api/health
+      timeout: 5s
+      interval: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    environment:
+    - POOLER_TENANT_ID=${POOLER_TENANT_ID}
+    - POOLER_POOL_MODE=transaction
+    - POOLER_DEFAULT_POOL_SIZE=${POOLER_DEFAULT_POOL_SIZE}
+    - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN}
+    - PORT=4000
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - POSTGRES_HOSTNAME=${POSTGRES_HOSTNAME}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - DATABASE_URL=ecto://supabase_admin:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/_supabase
+    - CLUSTER_POSTGRES=true
+    - SECRET_KEY_BASE=${SERVICE_PASSWORD_SUPAVISORSECRET}
+    - VAULT_ENC_KEY=${SERVICE_PASSWORD_VAULTENC}
+    - API_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - METRICS_JWT_SECRET=${SERVICE_PASSWORD_JWT}
+    - REGION=local
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE}
+    - GLOBAL_DOWNSTREAM_CERT_PATH=/etc/ssl/server.crt
+    - GLOBAL_DOWNSTREAM_KEY_PATH=/etc/ssl/server.key
+    command:
+    - /bin/sh
+    - -c
+    - "if [ ! -f /etc/ssl/server.crt ]; then\n  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \\\n    -keyout /etc/ssl/server.key -out /etc/ssl/server.crt \\\n    -subj \"/CN=supabase-pooler\"\nfi\n/app/bin/migrate && /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\" && /app/bin/server\n"
+    volumes:
+    - type: bind
+      source: ./files/volumes/pooler/pooler.exs
+      target: /etc/pooler/pooler.exs
+      read_only: true
+volumes:
+  supabase-db-data: null
+  supabase-db-config: null
+  deno-cache: null
+  supabase-minio-data: null

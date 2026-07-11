@@ -1,0 +1,131 @@
+[variables]
+main_domain = "${domain}"
+postgres_password = "${password:32}"
+dashboard_password = "${password:32}"
+logflare_public_access_token = "${password:32}"
+logflare_private_access_token = "${password:32}"
+secret_key_base = "${password:64}"
+vault_enc_key = "${password:32}"
+pg_meta_crypto_key = "${password:32}"
+realtime_db_enc_key = "${password:16}"
+jwt_secret = "${password:48}"
+minio_root_user = "supabase"
+minio_root_password = "${password:32}"
+supabase_publishable_key = "sb_publishable_${password:48}"
+supabase_secret_key = "sb_secret_${password:64}"
+s3_access_key_id = "${password:32}"
+s3_access_key_secret = "${password:64}"
+pooler_tenant_id = "${password:12}"
+container_name_prefix = "${APP_NAME}-supabase"
+anon_key_payload = """{
+  "role": "anon",
+  "iss": "supabase",
+  "exp": ${timestamps:2030-01-01T00:00:00Z}
+}
+"""
+service_role_key_payload = """{
+  "role": "service_role",
+  "iss": "supabase",
+  "exp": ${timestamps:2030-01-01T00:00:00Z}
+}
+"""
+anon_key = "${jwt:jwt_secret:anon_key_payload}"
+service_role_key = "${jwt:jwt_secret:service_role_key_payload}"
+
+[[config.domains]]
+serviceName = "supabase-kong"
+port = 8000
+host = "${main_domain}"
+
+[config]
+env = [
+"CONTAINER_PREFIX=${container_name_prefix}",
+"SUPABASE_PUBLIC_URL=https://${main_domain}",
+"ADDITIONAL_REDIRECT_URLS=https://${main_domain}/*,http://localhost:3000/*",
+"POSTGRES_PASSWORD=${postgres_password}",
+"SERVICE_PASSWORD_POSTGRES=${postgres_password}",
+"JWT_SECRET=${jwt_secret}",
+"SERVICE_PASSWORD_JWT=${jwt_secret}",
+"ANON_KEY=${anon_key}",
+"SERVICE_SUPABASEANON_KEY=${anon_key}",
+"SERVICE_ROLE_KEY=${service_role_key}",
+"SERVICE_SUPABASESERVICE_KEY=${service_role_key}",
+"DASHBOARD_USERNAME=supabase",
+"SERVICE_USER_ADMIN=supabase",
+"DASHBOARD_PASSWORD=${dashboard_password}",
+"SERVICE_PASSWORD_ADMIN=${dashboard_password}",
+"LOGFLARE_PUBLIC_ACCESS_TOKEN=${logflare_public_access_token}",
+"LOGFLARE_PRIVATE_ACCESS_TOKEN=${logflare_private_access_token}",
+"SERVICE_PASSWORD_LOGFLARE=${logflare_public_access_token}",
+"SERVICE_PASSWORD_LOGFLAREPRIVATE=${logflare_private_access_token}",
+"LOGFLARE_API_KEY=${logflare_public_access_token}",
+"SECRET_KEY_BASE=${secret_key_base}",
+"VAULT_ENC_KEY=${vault_enc_key}",
+"PG_META_CRYPTO_KEY=${pg_meta_crypto_key}",
+"SERVICE_PASSWORD_PGMETACRYPTO=${pg_meta_crypto_key}",
+"REALTIME_DB_ENC_KEY=${realtime_db_enc_key}",
+"S3_PROTOCOL_ACCESS_KEY_ID=${s3_access_key_id}",
+"S3_PROTOCOL_ACCESS_KEY_SECRET=${s3_access_key_secret}",
+"MINIO_ROOT_USER=${minio_root_user}",
+"MINIO_ROOT_PASSWORD=${minio_root_password}",
+"SUPABASE_PUBLISHABLE_KEY=${supabase_publishable_key}",
+"SUPABASE_SECRET_KEY=${supabase_secret_key}",
+"POSTGRES_HOST=supabase-db",
+"POSTGRES_HOSTNAME=supabase-db",
+"POSTGRES_DB=postgres",
+"POSTGRES_PORT=5432",
+"POOLER_DEFAULT_POOL_SIZE=20",
+"POOLER_MAX_CLIENT_CONN=100",
+"POOLER_TENANT_ID=${pooler_tenant_id}",
+"POOLER_POOL_MODE=transaction",
+"PGRST_DB_SCHEMAS=public,storage,graphql_public",
+"PGRST_DB_MAX_ROWS=1000",
+"PGRST_DB_EXTRA_SEARCH_PATH=public",
+"JWT_EXPIRY=3600",
+"DISABLE_SIGNUP=false",
+"ENABLE_EMAIL_SIGNUP=false",
+"ENABLE_EMAIL_AUTOCONFIRM=false",
+"ENABLE_ANONYMOUS_USERS=false",
+"ENABLE_PHONE_SIGNUP=false",
+"ENABLE_PHONE_AUTOCONFIRM=false",
+"MAILER_URLPATHS_CONFIRMATION=/auth/v1/verify",
+"MAILER_URLPATHS_INVITE=/auth/v1/verify",
+"MAILER_URLPATHS_RECOVERY=/auth/v1/verify",
+"MAILER_URLPATHS_EMAIL_CHANGE=/auth/v1/verify",
+"SMTP_ADMIN_EMAIL=admin@example.com",
+"SMTP_HOST=supabase-mail",
+"SMTP_PORT=2500",
+"SMTP_USER=fake_mail_user",
+"SMTP_PASS=fake_mail_password",
+"SMTP_SENDER_NAME=fake_sender",
+"STUDIO_DEFAULT_ORGANIZATION=Default Organization",
+"STUDIO_DEFAULT_PROJECT=Default Project",
+"OPENAI_API_KEY=",
+"FUNCTIONS_VERIFY_JWT=false",
+"IMGPROXY_ENABLE_WEBP_DETECTION=true",
+"IMGPROXY_AUTO_WEBP=true",
+"GLOBAL_S3_BUCKET=stub",
+"STORAGE_TENANT_ID=stub",
+"REGION=stub",
+"KONG_STORAGE_CONNECT_TIMEOUT=60",
+"KONG_STORAGE_WRITE_TIMEOUT=3600",
+"KONG_STORAGE_READ_TIMEOUT=3600",
+"KONG_STORAGE_REQUEST_BUFFERING=false",
+"KONG_STORAGE_RESPONSE_BUFFERING=false",
+"SERVICE_USER_MINIO=${minio_root_user}",
+"SERVICE_PASSWORD_MINIO=${minio_root_password}",
+"SERVICE_PASSWORD_SUPAVISORSECRET=${secret_key_base}",
+"SERVICE_PASSWORD_VAULTENC=${vault_enc_key}",
+"POOLER_DB_POOL_SIZE=5",
+"MAILER_TEMPLATES_INVITE=",
+"MAILER_TEMPLATES_CONFIRMATION=",
+"MAILER_TEMPLATES_RECOVERY=",
+"MAILER_TEMPLATES_MAGIC_LINK=",
+"MAILER_TEMPLATES_EMAIL_CHANGE=",
+"MAILER_SUBJECTS_INVITE=You have been invited",
+"MAILER_SUBJECTS_CONFIRMATION=Confirm your signup",
+"MAILER_SUBJECTS_RECOVERY=Reset your password",
+"MAILER_SUBJECTS_MAGIC_LINK=Your magic link",
+"MAILER_SUBJECTS_EMAIL_CHANGE=Confirm email change",
+"DOCKER_SOCKET_LOCATION=/var/run/docker.sock",
+]

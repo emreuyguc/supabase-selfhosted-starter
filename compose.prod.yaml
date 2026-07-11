@@ -1,0 +1,66 @@
+x-prod-logging: &prod-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  supabase-kong:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-studio:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-db:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-analytics:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-vector:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-rest:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-auth:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  realtime-dev:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-minio:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  minio-createbucket:
+    restart: "no"
+    logging: *prod-logging
+
+  supabase-storage:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  imgproxy:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-meta:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-edge-functions:
+    restart: unless-stopped
+    logging: *prod-logging
+
+  supabase-supavisor:
+    restart: unless-stopped
+    logging: *prod-logging

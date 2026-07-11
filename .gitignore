@@ -1,0 +1,31 @@
+# Environment files (contain secrets)
+.env
+.env.local
+.env.production
+
+# Generator output (always regenerated)
+output/
+
+# Node dependencies
+node_modules/
+
+# Local backup archives and dumps
+backups/*
+
+# Database data
+volumes/db/data/
+
+# Docker volumes
+volumes/storage/
+
+# Snippets folder (Studio-generated)
+volumes/snippets/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

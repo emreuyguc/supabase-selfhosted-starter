@@ -1,0 +1,94 @@
+name: supabase-self-hosted-starter
+app: supabase
+repository_type: single-app-template
+starter_version: 0.1.0
+last_updated: 2026-07-11
+canonical_compose: compose.yaml
+production_override: compose.prod.yaml
+env_example: .env.example
+runtime_tests: tests/runtime
+test_framework: vitest
+
+platform_templates:
+  dokploy: dokploy/template.json
+
+services:
+  supabase-kong:
+    image: kong/kong:3.9.1
+    role: public-api-gateway
+    public: true
+  supabase-studio:
+    image: supabase/studio:2026.06.03-sha-0bca601
+    role: dashboard
+    public: behind-kong-basic-auth
+  supabase-db:
+    image: supabase/postgres:17.6.1.136
+    role: database
+    public: false
+    persistent_volumes:
+      - supabase-db-data
+      - supabase-db-config
+  supabase-analytics:
+    image: supabase/logflare:1.31.2
+    role: analytics-logs
+    public: false
+  supabase-vector:
+    image: timberio/vector:0.53.0-alpine
+    role: log-router
+    public: false
+  supabase-auth:
+    image: supabase/gotrue:v2.189.0
+    role: auth
+    public: via-kong
+  supabase-rest:
+    image: postgrest/postgrest:v14.12
+    role: rest-api
+    public: via-kong
+  realtime-dev:
+    image: supabase/realtime:v2.102.3
+    role: realtime
+    public: via-kong
+  supabase-storage:
+    image: supabase/storage-api:v1.60.4
+    role: storage-api
+    public: via-kong
+  supabase-minio:
+    image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+    role: object-storage
+    public: false
+    persistent_volumes:
+      - supabase-minio-data
+  minio-createbucket:
+    image: minio/mc
+    role: object-storage-bootstrap
+    public: false
+  supabase-edge-functions:
+    image: supabase/edge-runtime:v1.74.0
+    role: edge-functions
+    public: via-kong
+  imgproxy:
+    image: darthsim/imgproxy:v3.30.1
+    role: image-transformer
+    public: false
+  supabase-meta:
+    image: supabase/postgres-meta:v0.96.6
+    role: postgres-admin-api
+    public: via-kong-admin-acl
+  supabase-supavisor:
+    image: supabase/supavisor:2.9.5
+    role: connection-pooler
+    public: false
+
+features:
+  graphql: enabled
+  cron: enabled
+  smtp_default: disabled
+  phone_signup_default: disabled
+  modern_opaque_keys: gateway-mapped-to-legacy-jwt
+
+required_runtime_validation:
+  - docker compose --env-file .env.example -f compose.yaml config --quiet
+  - docker compose --env-file .env.example -f compose.yaml -f compose.prod.yaml config --quiet
+  - python3 -m json.tool dokploy/template.json
+  - npm --prefix tests/runtime run typecheck
+  - ./scripts/validate.sh

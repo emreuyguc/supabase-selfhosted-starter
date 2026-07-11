@@ -1,0 +1,55 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show tool versions
+        run: |
+          docker compose version
+          python3 --version
+
+      - name: Shell syntax
+        run: |
+          for file in scripts/*.sh; do
+            sh -n "$file"
+          done
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/runtime/package-lock.json
+
+      - name: Install runtime test dependencies
+        run: |
+          npm --prefix tests/runtime ci
+
+      - name: Type-check runtime tests
+        run: |
+          npm --prefix tests/runtime run typecheck
+
+      - name: Render Dokploy template
+        run: |
+          make render-dokploy
+
+      - name: Render README summary
+        run: |
+          make render-readme
+
+      - name: Ensure rendered artifacts are committed
+        run: |
+          git diff --exit-code -- dokploy/template.json README.md
+
+      - name: Validate static artifacts
+        run: |
+          make validate
