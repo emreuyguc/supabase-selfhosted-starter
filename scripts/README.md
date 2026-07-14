@@ -49,6 +49,7 @@ POSTGRES_HOST=db.example.com \
 POSTGRES_PASSWORD=runtime_db_password \
 POSTGRES_BOOTSTRAP_PASSWORD=admin_db_password \
 STORAGE_S3_ENDPOINT=http://s3.example.com \
+STORAGE_S3_PROTOCOL=http \
 STORAGE_S3_ACCESS_KEY_ID=s3_access_key \
 STORAGE_S3_SECRET_ACCESS_KEY=s3_secret_key \
 GLOBAL_S3_BUCKET=supabase-storage \
@@ -76,6 +77,7 @@ Optional generator inputs:
 | `POSTGRES_DB_OWNER` | `supabase_admin`, only written for `external-db` |
 | `POSTGRES_BOOTSTRAP_DB` | `postgres`, only written for `external-db` |
 | `POSTGRES_BOOTSTRAP_USER` | `postgres`, only written for `external-db` |
+| `STORAGE_S3_PROTOCOL` | parsed from `STORAGE_S3_ENDPOINT` or `https`, only written for `external-s3` |
 | `STORAGE_S3_REGION` | `REGION` or `us-east-1`, only written for `external-s3` |
 | `STORAGE_S3_FORCE_PATH_STYLE` | `true`, only written for `external-s3` |
 

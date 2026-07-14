@@ -161,7 +161,7 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
     if external_s3:
         text = text.replace(
             's3_access_key_id = "${password:32}"',
-            's3_access_key_id = "${password:32}"\nstorage_s3_endpoint = "http://s3.example.com"\nstorage_s3_bucket = "supabase-storage"\nstorage_s3_access_key_id = "replace_with_external_s3_access_key"\nstorage_s3_secret_access_key = "replace_with_external_s3_secret_key"\nstorage_s3_region = "us-east-1"\nstorage_s3_force_path_style = "true"',
+            's3_access_key_id = "${password:32}"\nstorage_s3_endpoint = "http://s3.example.com"\nstorage_s3_protocol = "http"\nstorage_s3_bucket = "supabase-storage"\nstorage_s3_access_key_id = "replace_with_external_s3_access_key"\nstorage_s3_secret_access_key = "replace_with_external_s3_secret_key"\nstorage_s3_region = "us-east-1"\nstorage_s3_force_path_style = "true"',
         )
     if external_db:
         text = text.replace(
@@ -184,7 +184,7 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
         )
         text = text.replace(
             '"REGION=us-east-1"',
-            '"REGION=${storage_s3_region}",\n"STORAGE_S3_ENDPOINT=${storage_s3_endpoint}",\n"STORAGE_S3_ACCESS_KEY_ID=${storage_s3_access_key_id}",\n"STORAGE_S3_SECRET_ACCESS_KEY=${storage_s3_secret_access_key}",\n"STORAGE_S3_REGION=${storage_s3_region}",\n"STORAGE_S3_FORCE_PATH_STYLE=${storage_s3_force_path_style}"',
+            '"REGION=${storage_s3_region}",\n"STORAGE_S3_ENDPOINT=${storage_s3_endpoint}",\n"STORAGE_S3_PROTOCOL=${storage_s3_protocol}",\n"STORAGE_S3_ACCESS_KEY_ID=${storage_s3_access_key_id}",\n"STORAGE_S3_SECRET_ACCESS_KEY=${storage_s3_secret_access_key}",\n"STORAGE_S3_REGION=${storage_s3_region}",\n"STORAGE_S3_FORCE_PATH_STYLE=${storage_s3_force_path_style}"',
         )
     return text
 
@@ -258,8 +258,13 @@ def apply_external_s3(data):
     replacements = {
         "SERVER_REGION=": "SERVER_REGION=${REGION}",
         "REGION=": "REGION=${REGION}",
+        "GLOBAL_S3_BUCKET=": "GLOBAL_S3_BUCKET=${GLOBAL_S3_BUCKET}",
+        "GLOBAL_S3_ENDPOINT=": "GLOBAL_S3_ENDPOINT=${STORAGE_S3_ENDPOINT}",
+        "GLOBAL_S3_PROTOCOL=": "GLOBAL_S3_PROTOCOL=${STORAGE_S3_PROTOCOL}",
+        "GLOBAL_S3_FORCE_PATH_STYLE=": "GLOBAL_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}",
         "STORAGE_S3_BUCKET=": "STORAGE_S3_BUCKET=${GLOBAL_S3_BUCKET}",
         "STORAGE_S3_ENDPOINT=": "STORAGE_S3_ENDPOINT=${STORAGE_S3_ENDPOINT}",
+        "STORAGE_S3_PROTOCOL=": "STORAGE_S3_PROTOCOL=${STORAGE_S3_PROTOCOL}",
         "STORAGE_S3_FORCE_PATH_STYLE=": "STORAGE_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}",
         "STORAGE_S3_REGION=": "STORAGE_S3_REGION=${REGION}",
         "AWS_ACCESS_KEY_ID=": "AWS_ACCESS_KEY_ID=${STORAGE_S3_ACCESS_KEY_ID}",
