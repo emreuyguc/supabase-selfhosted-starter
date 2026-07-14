@@ -162,7 +162,7 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
     if external_s3:
         text = text.replace(
             's3_access_key_id = "${password:32}"',
-            's3_access_key_id = "${password:32}"\nstorage_s3_endpoint = "http://s3.example.com"\nstorage_s3_bucket = "supabase-storage"\nstorage_s3_access_key_id = "replace_with_external_s3_access_key"\nstorage_s3_secret_access_key = "replace_with_external_s3_secret_key"\nstorage_s3_region = "us-east-1"\nstorage_s3_force_path_style = "true"',
+            's3_access_key_id = "${password:32}"\nglobal_s3_endpoint = "http://s3.example.com"\nglobal_s3_protocol = "http"\nglobal_s3_bucket = "supabase-storage"\nglobal_s3_access_key_id = "replace_with_external_s3_access_key"\nglobal_s3_secret_access_key = "replace_with_external_s3_secret_key"\nglobal_s3_region = "us-east-1"\nglobal_s3_force_path_style = "true"',
         )
     if external_db:
         text = text.replace(
@@ -180,12 +180,12 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
         )
     if external_s3:
         text = text.replace(
-            '"GLOBAL_S3_BUCKET=stub"',
-            '"GLOBAL_S3_BUCKET=${storage_s3_bucket}"',
+            '"GLOBAL_S3_BUCKET=supabase-storage"',
+            '"GLOBAL_S3_BUCKET=${global_s3_bucket}"',
         )
         text = text.replace(
-            '"REGION=stub"',
-            '"REGION=${storage_s3_region}",\n"STORAGE_S3_ENDPOINT=${storage_s3_endpoint}",\n"STORAGE_S3_ACCESS_KEY_ID=${storage_s3_access_key_id}",\n"STORAGE_S3_SECRET_ACCESS_KEY=${storage_s3_secret_access_key}",\n"STORAGE_S3_REGION=${storage_s3_region}",\n"STORAGE_S3_FORCE_PATH_STYLE=${storage_s3_force_path_style}"',
+            '"REGION=us-east-1"',
+            '"REGION=${global_s3_region}",\n"GLOBAL_S3_ENDPOINT=${global_s3_endpoint}",\n"GLOBAL_S3_PROTOCOL=${global_s3_protocol}",\n"GLOBAL_S3_FORCE_PATH_STYLE=${global_s3_force_path_style}",\n"STORAGE_S3_ACCESS_KEY_ID=${global_s3_access_key_id}",\n"STORAGE_S3_SECRET_ACCESS_KEY=${global_s3_secret_access_key}"',
         )
     return text
 
@@ -257,12 +257,12 @@ def apply_external_s3(data):
     remove_dependency(storage, "minio-createbucket")
     env = storage.get("environment", [])
     replacements = {
-        "SERVER_REGION=": "SERVER_REGION=${STORAGE_S3_REGION}",
-        "REGION=": "REGION=${STORAGE_S3_REGION}",
-        "STORAGE_S3_BUCKET=": "STORAGE_S3_BUCKET=${GLOBAL_S3_BUCKET}",
-        "STORAGE_S3_ENDPOINT=": "STORAGE_S3_ENDPOINT=${STORAGE_S3_ENDPOINT}",
-        "STORAGE_S3_FORCE_PATH_STYLE=": "STORAGE_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}",
-        "STORAGE_S3_REGION=": "STORAGE_S3_REGION=${STORAGE_S3_REGION}",
+        "SERVER_REGION=": "SERVER_REGION=${REGION}",
+        "REGION=": "REGION=${REGION}",
+        "GLOBAL_S3_BUCKET=": "GLOBAL_S3_BUCKET=${GLOBAL_S3_BUCKET}",
+        "GLOBAL_S3_ENDPOINT=": "GLOBAL_S3_ENDPOINT=${GLOBAL_S3_ENDPOINT}",
+        "GLOBAL_S3_PROTOCOL=": "GLOBAL_S3_PROTOCOL=${GLOBAL_S3_PROTOCOL}",
+        "GLOBAL_S3_FORCE_PATH_STYLE=": "GLOBAL_S3_FORCE_PATH_STYLE=${GLOBAL_S3_FORCE_PATH_STYLE}",
         "AWS_ACCESS_KEY_ID=": "AWS_ACCESS_KEY_ID=${STORAGE_S3_ACCESS_KEY_ID}",
         "AWS_SECRET_ACCESS_KEY=": "AWS_SECRET_ACCESS_KEY=${STORAGE_S3_SECRET_ACCESS_KEY}",
     }
