@@ -121,8 +121,12 @@ for template in templates:
     services = compose.get("services", {})
     if template.name in {"full-local.json", "full-external-s3.json"} and "supabase-db" not in services:
         raise SystemExit(f"{template} must include supabase-db")
+    if template.name in {"full-local.json", "full-external-s3.json"} and "supabase-db-passwords" not in services:
+        raise SystemExit(f"{template} must include supabase-db-passwords")
     if template.name in {"external-db-local.json", "external-db-external-s3.json", "external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db" in services:
         raise SystemExit(f"{template} must not include supabase-db")
+    if template.name in {"external-db-local.json", "external-db-external-s3.json", "external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db-passwords" in services:
+        raise SystemExit(f"{template} must not include supabase-db-passwords")
     if template.name in {"external-db-local.json", "external-db-external-s3.json"} and "supabase-db-bootstrap" not in services:
         raise SystemExit(f"{template} must include supabase-db-bootstrap")
     if template.name in {"external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db-bootstrap" in services:
@@ -150,10 +154,6 @@ for template in templates:
             env_names = set()
         required_storage_s3 = {
             "STORAGE_BACKEND",
-            "GLOBAL_S3_BUCKET",
-            "GLOBAL_S3_ENDPOINT",
-            "GLOBAL_S3_PROTOCOL",
-            "GLOBAL_S3_FORCE_PATH_STYLE",
             "STORAGE_S3_BUCKET",
             "STORAGE_S3_ENDPOINT",
             "STORAGE_S3_FORCE_PATH_STYLE",
@@ -167,14 +167,23 @@ for template in templates:
                 f"{template} supabase-storage missing S3 env: "
                 + ", ".join(missing_storage_s3)
             )
-        if "external-s3" in template.name and "STORAGE_S3_PROTOCOL" not in env_names:
-            raise SystemExit(f"{template} supabase-storage missing STORAGE_S3_PROTOCOL")
+        forbidden_storage_s3 = sorted(
+            name for name in env_names
+            if name.startswith("GLOBAL_S3_") or name == "STORAGE_S3_PROTOCOL"
+        )
+        if forbidden_storage_s3:
+            raise SystemExit(
+                f"{template} supabase-storage has duplicate or unsupported S3 env: "
+                + ", ".join(forbidden_storage_s3)
+            )
 
 required_files = [
     "files/volumes/api/kong.yml",
     "files/volumes/api/kong-entrypoint.sh",
     "files/volumes/db/graphql.sql",
     "files/volumes/db/cron.sql",
+    "files/volumes/db/sync-passwords.sh",
+    "files/volumes/db/sync-passwords.sql",
     "files/volumes/logs/vector.yml",
     "files/volumes/pooler/pooler.exs",
     "files/entrypoint.sh",

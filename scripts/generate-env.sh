@@ -74,7 +74,6 @@ import string
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlparse
 
 out = Path(sys.argv[1])
 variant = sys.argv[2]
@@ -120,9 +119,9 @@ public_url = os.environ.get("SUPABASE_PUBLIC_URL", "http://localhost:8000").rstr
 container_prefix = os.environ.get("CONTAINER_PREFIX", "supabase")
 dashboard_user = os.environ.get("DASHBOARD_USERNAME", "supabase")
 minio_user = os.environ.get("MINIO_ROOT_USER", "supabase")
-bucket = os.environ.get("GLOBAL_S3_BUCKET", "stub")
+bucket = os.environ.get("STORAGE_S3_BUCKET", "stub")
 storage_tenant = os.environ.get("STORAGE_TENANT_ID", "stub")
-region = os.environ.get("REGION", "stub")
+storage_s3_region = os.environ.get("STORAGE_S3_REGION", "us-east-1")
 
 if variant == "full":
     postgres_password = token(40)
@@ -148,18 +147,16 @@ if storage_variant == "external-s3":
     external_s3_endpoint = required_env("STORAGE_S3_ENDPOINT")
     external_s3_access_key = required_env("STORAGE_S3_ACCESS_KEY_ID")
     external_s3_secret_key = required_env("STORAGE_S3_SECRET_ACCESS_KEY")
-    external_s3_bucket = required_env("GLOBAL_S3_BUCKET")
-    external_s3_region = os.environ.get("STORAGE_S3_REGION", os.environ.get("REGION", "us-east-1"))
+    external_s3_bucket = required_env("STORAGE_S3_BUCKET")
+    external_s3_region = storage_s3_region
     external_s3_force_path_style = os.environ.get("STORAGE_S3_FORCE_PATH_STYLE", "true")
-    external_s3_protocol = os.environ.get("STORAGE_S3_PROTOCOL") or urlparse(external_s3_endpoint).scheme or "https"
 else:
     external_s3_endpoint = ""
     external_s3_access_key = ""
     external_s3_secret_key = ""
     external_s3_bucket = bucket
-    external_s3_region = region
+    external_s3_region = storage_s3_region
     external_s3_force_path_style = "true"
-    external_s3_protocol = "http"
 jwt_secret = token(48)
 anon_key = jwt("anon", jwt_secret)
 service_role_key = jwt("service_role", jwt_secret)
@@ -215,30 +212,23 @@ if storage_variant == "local":
         [
             ("MINIO_ROOT_USER", minio_user),
             ("MINIO_ROOT_PASSWORD", minio_password),
-            ("SERVICE_USER_MINIO", minio_user),
-            ("SERVICE_PASSWORD_MINIO", minio_password),
         ]
     )
 storage_values.extend(
     [
         ("IMGPROXY_ENABLE_WEBP_DETECTION", "true"),
         ("IMGPROXY_AUTO_WEBP", "true"),
-        ("GLOBAL_S3_BUCKET", external_s3_bucket),
+        ("STORAGE_S3_BUCKET", external_s3_bucket),
+        ("STORAGE_S3_REGION", external_s3_region),
         ("STORAGE_TENANT_ID", storage_tenant),
-        ("REGION", external_s3_region),
     ]
 )
 if storage_variant == "external-s3":
     storage_values.extend(
         [
-            ("GLOBAL_S3_ENDPOINT", external_s3_endpoint),
-            ("GLOBAL_S3_PROTOCOL", external_s3_protocol),
-            ("GLOBAL_S3_FORCE_PATH_STYLE", external_s3_force_path_style),
             ("STORAGE_S3_ENDPOINT", external_s3_endpoint),
-            ("STORAGE_S3_PROTOCOL", external_s3_protocol),
             ("STORAGE_S3_ACCESS_KEY_ID", external_s3_access_key),
             ("STORAGE_S3_SECRET_ACCESS_KEY", external_s3_secret_key),
-            ("STORAGE_S3_REGION", external_s3_region),
             ("STORAGE_S3_FORCE_PATH_STYLE", external_s3_force_path_style),
         ]
     )

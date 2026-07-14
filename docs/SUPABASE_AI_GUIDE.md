@@ -124,8 +124,10 @@ Important aliases:
 | Service role key | `SERVICE_ROLE_KEY`, `SERVICE_SUPABASESERVICE_KEY` |
 | Dashboard user | `DASHBOARD_USERNAME`, `SERVICE_USER_ADMIN` |
 | Dashboard password | `DASHBOARD_PASSWORD`, `SERVICE_PASSWORD_ADMIN` |
-| MinIO user | `MINIO_ROOT_USER`, `SERVICE_USER_MINIO` |
-| MinIO password | `MINIO_ROOT_PASSWORD`, `SERVICE_PASSWORD_MINIO` |
+
+Storage uses one canonical env namespace: `STORAGE_S3_*` for backend settings and
+`MINIO_ROOT_*` for the local MinIO credentials. Do not add `GLOBAL_S3_*` or
+service-prefixed MinIO aliases.
 
 ## Deployment variant contract
 
