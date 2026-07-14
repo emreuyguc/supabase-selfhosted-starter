@@ -4,6 +4,36 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+echo "Validating manifest base Compose contract..."
+python3 - <<'PY'
+from pathlib import Path
+import yaml
+
+manifest = yaml.safe_load(Path("manifest.yaml").read_text())
+base_compose = manifest.get("base_compose")
+if base_compose != "compose.yaml":
+    raise SystemExit("manifest.yaml base_compose must be compose.yaml")
+if manifest.get("canonical_compose") != base_compose:
+    raise SystemExit("manifest.yaml canonical_compose must match base_compose")
+if not Path(base_compose).exists():
+    raise SystemExit(f"Missing base compose file: {base_compose}")
+
+for name, variant in manifest.get("variants", {}).items():
+    compose_files = variant.get("compose_files", [])
+    if not compose_files or compose_files[0] != base_compose:
+        raise SystemExit(f"variant {name} must start compose_files with {base_compose}")
+
+external_s3 = manifest.get("feature_overlays", {}).get("external-s3")
+if not external_s3:
+    raise SystemExit("manifest.yaml must define feature_overlays.external-s3")
+if external_s3.get("status") != "base-compose":
+    raise SystemExit("feature_overlays.external-s3 status must be base-compose")
+if external_s3.get("compose_file") != "compose.features.external-s3.yaml":
+    raise SystemExit("feature_overlays.external-s3 compose_file must be compose.features.external-s3.yaml")
+if not Path(external_s3["compose_file"]).exists():
+    raise SystemExit(f"Missing external S3 compose overlay: {external_s3['compose_file']}")
+PY
+
 echo "Validating root compose..."
 docker compose --env-file .env.example -f compose.yaml config --quiet
 
@@ -65,19 +95,18 @@ fi
 echo "Validating README generated summary..."
 CHECK=1 ./scripts/render-readme.sh
 
-echo "Validating Dokploy template JSON and embedded compose..."
+echo "Validating Dokploy import JSON and embedded compose..."
 python3 - <<'PY'
 import json
 from pathlib import Path
 import yaml
 
 templates = [
-    Path("dokploy/template.json"),
-    Path("dokploy/templates/full.json"),
+    Path("dokploy/templates/full-local.json"),
     Path("dokploy/templates/full-external-s3.json"),
-    Path("dokploy/templates/external-db.json"),
+    Path("dokploy/templates/external-db-local.json"),
     Path("dokploy/templates/external-db-external-s3.json"),
-    Path("dokploy/templates/external-prebuilt.json"),
+    Path("dokploy/templates/external-prebuilt-local.json"),
     Path("dokploy/templates/external-prebuilt-external-s3.json"),
 ]
 missing_templates = [str(path) for path in templates if not path.exists()]
@@ -90,15 +119,15 @@ for template in templates:
         raise SystemExit(f"{template} must contain compose and config")
     compose = yaml.safe_load(data["compose"])
     services = compose.get("services", {})
-    if template.name in {"template.json", "full.json", "full-external-s3.json"} and "supabase-db" not in services:
+    if template.name in {"full-local.json", "full-external-s3.json"} and "supabase-db" not in services:
         raise SystemExit(f"{template} must include supabase-db")
-    if template.name in {"external-db.json", "external-db-external-s3.json", "external-prebuilt.json", "external-prebuilt-external-s3.json"} and "supabase-db" in services:
+    if template.name in {"external-db-local.json", "external-db-external-s3.json", "external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db" in services:
         raise SystemExit(f"{template} must not include supabase-db")
-    if template.name in {"external-db.json", "external-db-external-s3.json"} and "supabase-db-bootstrap" not in services:
+    if template.name in {"external-db-local.json", "external-db-external-s3.json"} and "supabase-db-bootstrap" not in services:
         raise SystemExit(f"{template} must include supabase-db-bootstrap")
-    if template.name in {"external-prebuilt.json", "external-prebuilt-external-s3.json"} and "supabase-db-bootstrap" in services:
+    if template.name in {"external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db-bootstrap" in services:
         raise SystemExit(f"{template} must not include supabase-db-bootstrap")
-    if template.name in {"external-prebuilt.json", "external-prebuilt-external-s3.json"}:
+    if template.name in {"external-prebuilt-local.json", "external-prebuilt-external-s3.json"}:
         if "supabase-supavisor" not in services:
             raise SystemExit(f"{template} must keep managed supabase-supavisor")
         supavisor_command = str(services["supabase-supavisor"].get("command", ""))
@@ -132,7 +161,7 @@ missing = [p for p in required_files if not Path(p).exists()]
 if missing:
     raise SystemExit("Missing required bind-mounted files: " + ", ".join(missing))
 
-print("Dokploy JSON, embedded compose and required files are valid.")
+print("Dokploy import JSON, embedded compose and required files are valid.")
 PY
 
 sh -n files/volumes/db-bootstrap/bootstrap-external-db.sh
