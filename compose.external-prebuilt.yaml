@@ -1,0 +1,50 @@
+services:
+  supabase-db:
+    profiles:
+    - full-only
+
+  supabase-analytics:
+    depends_on: !reset []
+
+  supabase-rest:
+    depends_on: !override
+      supabase-analytics:
+        condition: service_healthy
+
+  supabase-auth:
+    depends_on: !override
+      supabase-analytics:
+        condition: service_healthy
+
+  realtime-dev:
+    depends_on: !override
+      supabase-analytics:
+        condition: service_healthy
+    environment:
+    - SEED_SELF_HOST=false
+    command: /app/bin/server
+
+  supabase-storage:
+    depends_on: !override
+      supabase-rest:
+        condition: service_started
+      imgproxy:
+        condition: service_started
+      supabase-minio:
+        condition: service_healthy
+      minio-createbucket:
+        condition: service_completed_successfully
+
+  supabase-meta:
+    depends_on: !override
+      supabase-analytics:
+        condition: service_healthy
+
+  supabase-supavisor:
+    depends_on: !override
+      supabase-analytics:
+        condition: service_healthy
+    command:
+    - /bin/sh
+    - -c
+    - "if [ ! -f /etc/ssl/server.crt ]; then\n  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \\\n    -keyout /etc/ssl/server.key -out /etc/ssl/server.crt \\\n    -subj \"/CN=supabase-pooler\"\nfi\n/app/bin/server\n"

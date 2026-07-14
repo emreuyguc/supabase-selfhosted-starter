@@ -2,7 +2,7 @@ name: supabase-self-hosted-starter
 app: supabase
 repository_type: single-app-template
 starter_version: 0.1.0
-last_updated: 2026-07-11
+last_updated: 2026-07-14
 canonical_compose: compose.yaml
 production_override: compose.prod.yaml
 env_example: .env.example
@@ -11,6 +11,13 @@ test_framework: vitest
 
 platform_templates:
   dokploy: dokploy/template.json
+  dokploy_variants:
+    full: dokploy/templates/full.json
+    full-external-s3: dokploy/templates/full-external-s3.json
+    external-db: dokploy/templates/external-db.json
+    external-db-external-s3: dokploy/templates/external-db-external-s3.json
+    external-prebuilt: dokploy/templates/external-prebuilt.json
+    external-prebuilt-external-s3: dokploy/templates/external-prebuilt-external-s3.json
 
 services:
   supabase-kong:
@@ -85,9 +92,51 @@ features:
   smtp_default: disabled
   phone_signup_default: disabled
   modern_opaque_keys: gateway-mapped-to-legacy-jwt
+  external_s3: compose.features.external-s3.yaml
+
+variants:
+  full:
+    status: current-default
+    topology: local-postgres-local-minio
+    env_example: .env.full.example
+    compose_files:
+      - compose.yaml
+      - compose.full.yaml
+      - compose.prod.yaml
+    env_generation: scripts/generate-env.sh --variant full
+  external-db:
+    status: supported-compose-overlay
+    topology: external-postgres-with-bootstrap
+    env_example: .env.external-db.example
+    compose_files:
+      - compose.yaml
+      - compose.external-db.yaml
+      - compose.prod.yaml
+    env_generation: scripts/generate-env.sh --variant external-db
+  external-prebuilt:
+    status: supported-compose-overlay
+    topology: external-postgres-managed-pooler-runtime-only
+    env_example: .env.external-prebuilt.example
+    compose_files:
+      - compose.yaml
+      - compose.external-prebuilt.yaml
+      - compose.prod.yaml
+    env_generation: scripts/generate-env.sh --variant external-prebuilt
+
+feature_overlays:
+  external-s3:
+    status: supported-feature-overlay
+    topology: external-object-storage
+    env_example: .env.external-s3.example
+    compose_file: compose.features.external-s3.yaml
+    env_generation: scripts/generate-env.sh --storage external-s3
 
 required_runtime_validation:
   - docker compose --env-file .env.example -f compose.yaml config --quiet
+  - docker compose --env-file .env.full.example -f compose.yaml -f compose.full.yaml config --quiet
+  - docker compose --env-file .env.external-db.example -f compose.yaml -f compose.external-db.yaml config --quiet
+  - docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --quiet
+  - docker compose --env-file .env.external-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml config --quiet
   - docker compose --env-file .env.example -f compose.yaml -f compose.prod.yaml config --quiet
   - python3 -m json.tool dokploy/template.json
   - npm --prefix tests/runtime run typecheck

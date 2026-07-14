@@ -7,7 +7,7 @@ render-readme:
 	./scripts/render-readme.sh
 
 render-dokploy:
-	./scripts/render-dokploy.sh
+	$(MAKE) -C dokploy render-all
 
 generate-env:
 	./scripts/generate-env.sh

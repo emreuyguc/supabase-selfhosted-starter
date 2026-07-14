@@ -1,0 +1,80 @@
+services:
+  supabase-db:
+    profiles:
+    - full-only
+
+  supabase-db-bootstrap:
+    image: supabase/postgres:17.6.1.136
+    restart: "no"
+    environment:
+    - POSTGRES_HOSTNAME=${POSTGRES_HOSTNAME}
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - POSTGRES_BOOTSTRAP_DB=${POSTGRES_BOOTSTRAP_DB}
+    - POSTGRES_BOOTSTRAP_USER=${POSTGRES_BOOTSTRAP_USER}
+    - POSTGRES_BOOTSTRAP_PASSWORD=${POSTGRES_BOOTSTRAP_PASSWORD}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_DB_OWNER=${POSTGRES_DB_OWNER}
+    - SERVICE_PASSWORD_POSTGRES=${SERVICE_PASSWORD_POSTGRES}
+    - SERVICE_PASSWORD_JWT=${SERVICE_PASSWORD_JWT}
+    - JWT_EXPIRY=${JWT_EXPIRY}
+    entrypoint:
+    - /bin/sh
+    - /db-bootstrap/bootstrap-external-db.sh
+    volumes:
+    - type: bind
+      source: ./files/volumes/db-bootstrap
+      target: /db-bootstrap
+      read_only: true
+
+  supabase-analytics:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+
+  supabase-rest:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+      supabase-analytics:
+        condition: service_healthy
+
+  supabase-auth:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+      supabase-analytics:
+        condition: service_healthy
+
+  realtime-dev:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+      supabase-analytics:
+        condition: service_healthy
+
+  supabase-storage:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+      supabase-rest:
+        condition: service_started
+      imgproxy:
+        condition: service_started
+      supabase-minio:
+        condition: service_healthy
+      minio-createbucket:
+        condition: service_completed_successfully
+
+  supabase-meta:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+      supabase-analytics:
+        condition: service_healthy
+
+  supabase-supavisor:
+    depends_on: !override
+      supabase-db-bootstrap:
+        condition: service_completed_successfully
+      supabase-analytics:
+        condition: service_healthy

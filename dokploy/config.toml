@@ -40,8 +40,8 @@ host = "${main_domain}"
 [config]
 env = [
 "CONTAINER_PREFIX=${container_name_prefix}",
-"SUPABASE_PUBLIC_URL=https://${main_domain}",
-"ADDITIONAL_REDIRECT_URLS=https://${main_domain}/*,http://localhost:3000/*",
+"SUPABASE_PUBLIC_URL=http://${main_domain}",
+"ADDITIONAL_REDIRECT_URLS=http://${main_domain}/*,http://localhost:3000/*",
 "POSTGRES_PASSWORD=${postgres_password}",
 "SERVICE_PASSWORD_POSTGRES=${postgres_password}",
 "JWT_SECRET=${jwt_secret}",

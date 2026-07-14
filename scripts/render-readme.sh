@@ -16,6 +16,8 @@ begin = "<!-- BEGIN GENERATED:STACK_SUMMARY -->"
 end = "<!-- END GENERATED:STACK_SUMMARY -->"
 
 services = manifest["services"]
+variants = manifest.get("variants", {})
+feature_overlays = manifest.get("feature_overlays", {})
 
 lines = [
     begin,
@@ -34,6 +36,37 @@ lines = [
     f"| Runtime tests | `{manifest['runtime_tests']}` |",
     f"| Test framework | `{manifest['test_framework']}` |",
     f"| Dokploy artifact | `{manifest['platform_templates']['dokploy']}` |",
+    "",
+    "## Variant inventory",
+    "",
+    "Generated from `manifest.yaml`.",
+    "",
+    "| Variant | Status | Topology | Env example |",
+    "|---|---|---|---|",
+]
+
+for name, data in variants.items():
+    lines.append(
+        f"| `{name}` | {data['status']} | {data['topology']} | `{data['env_example']}` |"
+    )
+
+if feature_overlays:
+    lines += [
+        "",
+        "## Feature Overlay Inventory",
+        "",
+        "Generated from `manifest.yaml`.",
+        "",
+        "| Overlay | Status | Topology | Env example |",
+        "|---|---|---|---|",
+    ]
+
+    for name, data in feature_overlays.items():
+        lines.append(
+            f"| `{name}` | {data['status']} | {data['topology']} | `{data['env_example']}` |"
+        )
+
+lines += [
     "",
     "## Service inventory",
     "",

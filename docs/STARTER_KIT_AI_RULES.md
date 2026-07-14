@@ -73,6 +73,36 @@ When a layer changes, update its local README first. Update central docs only wh
   - an env feature flag for runtime behavior;
   - a Compose profile for optional containers.
 
+## Variant boundary contract
+
+Use one repeatable variant model across starter-kit repositories.
+
+- Env files provide values for a selected topology. Env must not decide which services exist.
+- Compose overlays select mutually exclusive deployment variants such as full-stack, external database or preconfigured external runtime.
+- Compose profiles are only for optional additive services that can be enabled on top of a selected variant.
+- Runtime config files and Dockerfiles may define package/config behavior, but must not hide production-critical defaults or fallbacks.
+- Required values must fail fast when missing. Do not hide them in Compose fallback expressions, entrypoint defaults or config fallbacks.
+- Generated platform artifacts may contain platform-safe fallbacks only when the canonical source remains strict and the generator documents the exception.
+
+Recommended file pattern:
+
+| File | Role |
+|---|---|
+| `compose.yaml` | Shared/base Compose contract when multiple variants exist |
+| `compose.<variant>.yaml` | Mutually exclusive topology overlay |
+| `compose.features.<name>.yaml` | Optional additive feature overlay when profiles are not enough |
+| `compose.prod.yaml` | Production policy overlay such as restart, logging and resource limits |
+| `.env.example` | Shared non-secret env inventory |
+| `.env.<variant>.example` | Variant-specific required values and documented placeholders |
+
+Recommended command shape:
+
+```sh
+docker compose --env-file .env -f compose.yaml -f compose.<variant>.yaml -f compose.prod.yaml up -d
+```
+
+Do not create fully duplicated Compose files per variant unless the upstream app makes overlays unsafe or unreadable. Do not use env variables to emulate service removal, dependency rewiring or migration/bootstrap selection.
+
 ## Docker and Compose checklist
 
 Before changing Docker/Compose, verify:

@@ -13,10 +13,16 @@ Primary artifacts:
 | Path | Purpose |
 |---|---|
 | `compose.yaml` | Canonical Docker Compose stack |
+| `compose.full.yaml` | Explicit full-stack variant overlay |
+| `compose.external-db.yaml` | External Postgres variant overlay |
+| `compose.external-prebuilt.yaml` | External preconfigured database variant overlay |
+| `compose.features.external-s3.yaml` | External S3 object storage feature overlay |
 | `compose.prod.yaml` | Production override for restart policy and bounded logs |
 | `.env.example` | Complete non-secret env inventory |
+| `.env.<variant>.example` | Variant-specific env examples |
 | `files/` | Supabase config, SQL init files, Edge Functions, Kong, Vector and pooler files |
 | `dokploy/template.json` | Generated Dokploy import template |
+| `dokploy/templates/*.json` | Generated Dokploy variant import templates |
 | `scripts/README.md` | Env generation, render, validation, backup and restore helpers |
 | `dokploy/README.md` | Dokploy template generation and import behavior |
 | `tests/README.md` | Test layer entrypoint |
@@ -34,7 +40,7 @@ Use `manifest.yaml` as the source of truth for service names, roles, image tags,
 For real local or production-like usage, generate secrets with:
 
 ```sh
-SUPABASE_PUBLIC_URL=https://example.com ./scripts/generate-env.sh
+SUPABASE_PUBLIC_URL=http://example.com ./scripts/generate-env.sh --variant full
 ```
 
 Script inputs, outputs, backup/restore behavior and safety notes live in `scripts/README.md`.
@@ -55,8 +61,8 @@ make validate
 
 Validation checks:
 
-- root Compose syntax;
-- production override syntax;
+- root and variant Compose syntax;
+- production override syntax for supported variants;
 - Dokploy template JSON;
 - embedded Dokploy Compose syntax;
 - required bind-mounted files.
@@ -66,20 +72,52 @@ Validation checks:
 Local/basic:
 
 ```sh
-docker compose --env-file .env -f compose.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.full.yaml up -d
 ```
 
 Production-style override:
 
 ```sh
-docker compose --env-file .env -f compose.yaml -f compose.prod.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.full.yaml -f compose.prod.yaml up -d
 ```
 
 Validate production-style config without starting containers:
 
 ```sh
-docker compose --env-file .env -f compose.yaml -f compose.prod.yaml config --quiet
+docker compose --env-file .env -f compose.yaml -f compose.full.yaml -f compose.prod.yaml config --quiet
 ```
+
+External Postgres variant:
+
+```sh
+docker compose --env-file .env -f compose.yaml -f compose.external-db.yaml up -d
+```
+
+This variant runs the external DB bootstrap job first. Use it when the external Postgres host is reachable but Supabase roles, databases, schemas and extensions still need to be prepared.
+
+The external Postgres provider must be Supabase-compatible enough to expose `pg_net`, `pg_graphql` and `pg_cron` in `pg_available_extensions`. `pg_cron` may also require provider-side preload/configuration before `CREATE EXTENSION pg_cron` succeeds. If the provider cannot support these extensions, use `external-prebuilt` only with a database that was already restored/configured with the required Supabase state.
+
+`supabase-db-bootstrap` is a one-shot Compose job. If bootstrap SQL changes, the bootstrap failed halfway, or the external database target changes, rerun that job explicitly before starting the runtime services again:
+
+```sh
+docker compose --env-file .env -f compose.yaml -f compose.external-db.yaml up --force-recreate supabase-db-bootstrap
+```
+
+External preconfigured/restored database variant:
+
+```sh
+docker compose --env-file .env -f compose.yaml -f compose.external-prebuilt.yaml up -d
+```
+
+This variant does not run DB bootstrap SQL and disables Realtime/Supavisor migration commands. Supavisor/pooler still runs inside this stack; only its DB-side schema/state is assumed to already exist. Use this variant only for a restored or already configured Supabase database.
+
+External S3 feature overlay:
+
+```sh
+docker compose --env-file .env -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml up -d
+```
+
+When using external S3, the local MinIO and bucket bootstrap services are not activated. The S3 provider must already expose the bucket and credentials declared in `.env`.
 
 Only Kong should be exposed publicly by default. Keep Postgres, MinIO, Logflare, pg-meta and internal APIs private.
 
@@ -114,6 +152,7 @@ Backup and restore script usage lives in `scripts/README.md`.
 - Keep signup disabled until SMTP/SMS is configured intentionally.
 - Keep only Kong public by default.
 - Retest Storage S3/SigV4 behavior if Kong Storage auth changes.
+- `supabase-vector` reads Docker container logs through a read-only Docker socket mount. Treat that host socket access as privileged operational surface and keep the deployment host trusted.
 
 ## Versioning
 
