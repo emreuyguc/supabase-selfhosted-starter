@@ -36,10 +36,6 @@ services:
     persistent_volumes:
       - supabase-db-data
       - supabase-db-config
-  supabase-db-passwords:
-    image: supabase/postgres:17.6.1.136
-    role: database-role-password-sync
-    public: false
   supabase-analytics:
     image: supabase/logflare:1.31.2
     role: analytics-logs

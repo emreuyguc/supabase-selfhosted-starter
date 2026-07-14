@@ -288,18 +288,15 @@ def external_compose(prebuilt=False, bootstrap=False, external_s3=False):
     data = copy.deepcopy(compose_data)
     services = data["services"]
     services.pop("supabase-db", None)
-    services.pop("supabase-db-passwords", None)
 
     for service in services.values():
         if isinstance(service, dict):
             remove_dependency(service, "supabase-db")
-            remove_dependency(service, "supabase-db-passwords")
 
     volumes = data.get("volumes")
     if isinstance(volumes, dict):
         volumes.pop("supabase-db-data", None)
         volumes.pop("supabase-db-config", None)
-        volumes.pop("supabase-db-socket", None)
 
     if bootstrap:
         add_bootstrap_service(data)

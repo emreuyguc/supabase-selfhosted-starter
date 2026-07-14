@@ -267,10 +267,10 @@ services:
             - |
               local apikey = kong.request.get_header("apikey")
               local auth = kong.request.get_header("authorization")
-              local publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-              local secret_key = os.getenv("SUPABASE_SECRET_KEY")
-              local anon_key = os.getenv("SUPABASE_ANON_KEY")
-              local service_key = os.getenv("SUPABASE_SERVICE_KEY")
+              local publishable_key = "$SUPABASE_PUBLISHABLE_KEY"
+              local secret_key = "$SUPABASE_SECRET_KEY"
+              local anon_key = "$SUPABASE_ANON_KEY"
+              local service_key = "$SUPABASE_SERVICE_KEY"
 
               local function bearer_value(value)
                 if value == nil or value == "" then
@@ -280,8 +280,8 @@ services:
               end
 
               -- Storage does not use key-auth because S3/SigV4 requests do not carry
-              -- Supabase apikey headers. Map modern opaque Supabase keys here without
-              -- touching AWS SigV4 or end-user JWT Authorization headers.
+              -- Supabase apikey headers. Values are injected by kong-entrypoint.sh
+              -- because the post-function sandbox cannot read process environment variables.
               if secret_key ~= nil and secret_key ~= "" and (apikey == secret_key or auth == bearer_value(secret_key) or auth == secret_key) then
                 kong.service.request.set_header("authorization", bearer_value(service_key))
               elseif publishable_key ~= nil and publishable_key ~= "" and (apikey == publishable_key or auth == bearer_value(publishable_key) or auth == publishable_key) then
