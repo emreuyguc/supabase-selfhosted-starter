@@ -121,12 +121,8 @@ for template in templates:
     services = compose.get("services", {})
     if template.name in {"full-local.json", "full-external-s3.json"} and "supabase-db" not in services:
         raise SystemExit(f"{template} must include supabase-db")
-    if template.name in {"full-local.json", "full-external-s3.json"} and "supabase-db-passwords" not in services:
-        raise SystemExit(f"{template} must include supabase-db-passwords")
     if template.name in {"external-db-local.json", "external-db-external-s3.json", "external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db" in services:
         raise SystemExit(f"{template} must not include supabase-db")
-    if template.name in {"external-db-local.json", "external-db-external-s3.json", "external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db-passwords" in services:
-        raise SystemExit(f"{template} must not include supabase-db-passwords")
     if template.name in {"external-db-local.json", "external-db-external-s3.json"} and "supabase-db-bootstrap" not in services:
         raise SystemExit(f"{template} must include supabase-db-bootstrap")
     if template.name in {"external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db-bootstrap" in services:
@@ -182,8 +178,6 @@ required_files = [
     "files/volumes/api/kong-entrypoint.sh",
     "files/volumes/db/graphql.sql",
     "files/volumes/db/cron.sql",
-    "files/volumes/db/sync-passwords.sh",
-    "files/volumes/db/sync-passwords.sql",
     "files/volumes/logs/vector.yml",
     "files/volumes/pooler/pooler.exs",
     "files/entrypoint.sh",
@@ -199,6 +193,10 @@ required_files = [
 missing = [p for p in required_files if not Path(p).exists()]
 if missing:
     raise SystemExit("Missing required bind-mounted files: " + ", ".join(missing))
+
+kong_config = Path("files/volumes/api/kong.yml").read_text()
+if "os.getenv(" in kong_config:
+    raise SystemExit("Kong post-function scripts must not use sandboxed os.getenv")
 
 required_local_password_roles = [
     "authenticator",

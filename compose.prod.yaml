@@ -17,10 +17,6 @@ services:
     restart: unless-stopped
     logging: *prod-logging
 
-  supabase-db-passwords:
-    restart: "no"
-    logging: *prod-logging
-
   supabase-analytics:
     restart: unless-stopped
     logging: *prod-logging
