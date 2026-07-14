@@ -161,6 +161,37 @@ missing = [p for p in required_files if not Path(p).exists()]
 if missing:
     raise SystemExit("Missing required bind-mounted files: " + ", ".join(missing))
 
+required_password_roles = [
+    "supabase_admin",
+    "authenticator",
+    "pgbouncer",
+    "supabase_auth_admin",
+    "supabase_functions_admin",
+    "supabase_storage_admin",
+]
+
+local_roles_sql = Path("files/volumes/db/roles.sql").read_text()
+missing_local_password_roles = [
+    role for role in required_password_roles
+    if f"ALTER USER {role} WITH PASSWORD :'pgpass';" not in local_roles_sql
+]
+if missing_local_password_roles:
+    raise SystemExit(
+        "files/volumes/db/roles.sql must set the shared Postgres password for: "
+        + ", ".join(missing_local_password_roles)
+    )
+
+bootstrap_roles_sql = Path("files/volumes/db-bootstrap/00-roles.sql").read_text()
+missing_bootstrap_password_roles = [
+    role for role in required_password_roles
+    if f"ALTER ROLE {role} WITH PASSWORD :'pgpass';" not in bootstrap_roles_sql
+]
+if missing_bootstrap_password_roles:
+    raise SystemExit(
+        "files/volumes/db-bootstrap/00-roles.sql must set the shared Postgres password for: "
+        + ", ".join(missing_bootstrap_password_roles)
+    )
+
 print("Dokploy import JSON, embedded compose and required files are valid.")
 PY
 
