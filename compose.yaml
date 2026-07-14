@@ -302,7 +302,7 @@ services:
     - GOTRUE_SMS_AUTOCONFIRM=${ENABLE_PHONE_AUTOCONFIRM}
   realtime-dev:
     image: supabase/realtime:v2.102.3
-    container_name: ${CONTAINER_PREFIX}.supabase-realtime
+    container_name: realtime-dev.${CONTAINER_PREFIX}.supabase-realtime
     depends_on:
       supabase-db:
         condition: service_healthy

@@ -3,6 +3,7 @@ app: supabase
 repository_type: single-app-template
 starter_version: 0.1.0
 last_updated: 2026-07-14
+base_compose: compose.yaml
 canonical_compose: compose.yaml
 production_override: compose.prod.yaml
 env_example: .env.example
@@ -10,13 +11,13 @@ runtime_tests: tests/runtime
 test_framework: vitest
 
 platform_templates:
-  dokploy: dokploy/template.json
+  dokploy: dokploy/templates/full-local.json
   dokploy_variants:
-    full: dokploy/templates/full.json
+    full-local: dokploy/templates/full-local.json
     full-external-s3: dokploy/templates/full-external-s3.json
-    external-db: dokploy/templates/external-db.json
+    external-db-local: dokploy/templates/external-db-local.json
     external-db-external-s3: dokploy/templates/external-db-external-s3.json
-    external-prebuilt: dokploy/templates/external-prebuilt.json
+    external-prebuilt-local: dokploy/templates/external-prebuilt-local.json
     external-prebuilt-external-s3: dokploy/templates/external-prebuilt-external-s3.json
 
 services:
@@ -125,7 +126,7 @@ variants:
 
 feature_overlays:
   external-s3:
-    status: supported-feature-overlay
+    status: base-compose
     topology: external-object-storage
     env_example: .env.external-s3.example
     compose_file: compose.features.external-s3.yaml
@@ -138,6 +139,6 @@ required_runtime_validation:
   - docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --quiet
   - docker compose --env-file .env.external-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml config --quiet
   - docker compose --env-file .env.example -f compose.yaml -f compose.prod.yaml config --quiet
-  - python3 -m json.tool dokploy/template.json
+  - python3 -m json.tool dokploy/templates/full-local.json
   - npm --prefix tests/runtime run typecheck
   - ./scripts/validate.sh
