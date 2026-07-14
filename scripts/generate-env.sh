@@ -4,13 +4,66 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 OUTPUT_ENV="${OUTPUT_ENV:-$ROOT_DIR/.env}"
 FORCE="${FORCE:-0}"
+VARIANT="${VARIANT:-full}"
+STORAGE="${STORAGE:-local}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --variant)
+      if [ "$#" -lt 2 ]; then
+        echo "--variant requires a value" >&2
+        exit 1
+      fi
+      VARIANT="$2"
+      shift 2
+      ;;
+    --variant=*)
+      VARIANT="${1#--variant=}"
+      shift
+      ;;
+    --storage)
+      if [ "$#" -lt 2 ]; then
+        echo "--storage requires a value" >&2
+        exit 1
+      fi
+      STORAGE="$2"
+      shift 2
+      ;;
+    --storage=*)
+      STORAGE="${1#--storage=}"
+      shift
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+case "$VARIANT" in
+  full|external-db|external-prebuilt) ;;
+  *)
+    echo "Unsupported variant: $VARIANT" >&2
+    echo "Supported variants: full, external-db, external-prebuilt" >&2
+    exit 1
+    ;;
+esac
+
+case "$STORAGE" in
+  local|external-s3) ;;
+  *)
+    echo "Unsupported storage: $STORAGE" >&2
+    echo "Supported storage: local, external-s3" >&2
+    exit 1
+    ;;
+esac
 
 if [ -e "$OUTPUT_ENV" ] && [ "$FORCE" != "1" ]; then
   echo "$OUTPUT_ENV already exists. Set FORCE=1 to overwrite." >&2
   exit 1
 fi
 
-python3 - "$OUTPUT_ENV" <<'PY'
+python3 - "$OUTPUT_ENV" "$VARIANT" "$STORAGE" <<'PY'
 import base64
 import hashlib
 import hmac
@@ -23,6 +76,8 @@ import time
 from pathlib import Path
 
 out = Path(sys.argv[1])
+variant = sys.argv[2]
+storage_variant = sys.argv[3]
 alphabet = string.ascii_lowercase + string.digits
 
 
@@ -53,6 +108,13 @@ def jwt(role: str, secret: str) -> str:
     return f"{signing_input}.{b64url(sig)}"
 
 
+def required_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} is required for the {variant} variant")
+    return value
+
+
 public_url = os.environ.get("SUPABASE_PUBLIC_URL", "http://localhost:8000").rstrip("/")
 container_prefix = os.environ.get("CONTAINER_PREFIX", "supabase")
 dashboard_user = os.environ.get("DASHBOARD_USERNAME", "supabase")
@@ -61,7 +123,40 @@ bucket = os.environ.get("GLOBAL_S3_BUCKET", "stub")
 storage_tenant = os.environ.get("STORAGE_TENANT_ID", "stub")
 region = os.environ.get("REGION", "stub")
 
-postgres_password = token(40)
+if variant == "full":
+    postgres_password = token(40)
+    postgres_host = os.environ.get("POSTGRES_HOST", "supabase-db")
+    postgres_hostname = os.environ.get("POSTGRES_HOSTNAME", postgres_host)
+else:
+    postgres_password = os.environ.get("SERVICE_PASSWORD_POSTGRES") or os.environ.get("POSTGRES_PASSWORD")
+    if not postgres_password:
+        raise SystemExit(f"SERVICE_PASSWORD_POSTGRES or POSTGRES_PASSWORD is required for the {variant} variant")
+    postgres_host = os.environ.get("POSTGRES_HOST") or required_env("POSTGRES_HOSTNAME")
+    postgres_hostname = os.environ.get("POSTGRES_HOSTNAME", postgres_host)
+
+postgres_db = os.environ.get("POSTGRES_DB", "postgres")
+postgres_port = os.environ.get("POSTGRES_PORT", "5432")
+postgres_db_owner = os.environ.get("POSTGRES_DB_OWNER", "supabase_admin")
+postgres_bootstrap_db = os.environ.get("POSTGRES_BOOTSTRAP_DB", "postgres")
+postgres_bootstrap_user = os.environ.get("POSTGRES_BOOTSTRAP_USER", "postgres")
+postgres_bootstrap_password = os.environ.get("POSTGRES_BOOTSTRAP_PASSWORD")
+if variant == "external-db" and not postgres_bootstrap_password:
+    raise SystemExit("POSTGRES_BOOTSTRAP_PASSWORD is required for the external-db variant")
+
+if storage_variant == "external-s3":
+    external_s3_endpoint = required_env("STORAGE_S3_ENDPOINT")
+    external_s3_access_key = required_env("STORAGE_S3_ACCESS_KEY_ID")
+    external_s3_secret_key = required_env("STORAGE_S3_SECRET_ACCESS_KEY")
+    external_s3_bucket = required_env("GLOBAL_S3_BUCKET")
+    external_s3_region = os.environ.get("STORAGE_S3_REGION", os.environ.get("REGION", "us-east-1"))
+    external_s3_force_path_style = os.environ.get("STORAGE_S3_FORCE_PATH_STYLE", "true")
+else:
+    external_s3_endpoint = ""
+    external_s3_access_key = ""
+    external_s3_secret_key = ""
+    external_s3_bucket = bucket
+    external_s3_region = region
+    external_s3_force_path_style = "true"
 jwt_secret = token(48)
 anon_key = jwt("anon", jwt_secret)
 service_role_key = jwt("service_role", jwt_secret)
@@ -79,6 +174,68 @@ publishable_key = "sb_publishable_" + token(48)
 secret_key = "sb_secret_" + token(72)
 pooler_tenant = token(12)
 
+postgres_values = [
+    ("POSTGRES_PASSWORD", postgres_password),
+    ("SERVICE_PASSWORD_POSTGRES", postgres_password),
+    ("POSTGRES_HOST", postgres_host),
+    ("POSTGRES_HOSTNAME", postgres_hostname),
+    ("POSTGRES_DB", postgres_db),
+    ("POSTGRES_PORT", postgres_port),
+]
+if variant == "external-db":
+    postgres_values.extend(
+        [
+            ("POSTGRES_DB_OWNER", postgres_db_owner),
+            ("POSTGRES_BOOTSTRAP_DB", postgres_bootstrap_db),
+            ("POSTGRES_BOOTSTRAP_USER", postgres_bootstrap_user),
+            ("POSTGRES_BOOTSTRAP_PASSWORD", postgres_bootstrap_password or ""),
+        ]
+    )
+postgres_values.extend(
+    [
+        ("POOLER_DEFAULT_POOL_SIZE", "20"),
+        ("POOLER_MAX_CLIENT_CONN", "100"),
+        ("POOLER_TENANT_ID", pooler_tenant),
+        ("POOLER_POOL_MODE", "transaction"),
+        ("POOLER_DB_POOL_SIZE", "5"),
+    ]
+)
+
+storage_values = [
+    ("S3_PROTOCOL_ACCESS_KEY_ID", s3_access_key),
+    ("S3_PROTOCOL_ACCESS_KEY_SECRET", s3_secret_key),
+]
+storage_group_title = "Storage and external S3"
+if storage_variant == "local":
+    storage_group_title = "Storage and MinIO"
+    storage_values.extend(
+        [
+            ("MINIO_ROOT_USER", minio_user),
+            ("MINIO_ROOT_PASSWORD", minio_password),
+            ("SERVICE_USER_MINIO", minio_user),
+            ("SERVICE_PASSWORD_MINIO", minio_password),
+        ]
+    )
+storage_values.extend(
+    [
+        ("IMGPROXY_ENABLE_WEBP_DETECTION", "true"),
+        ("IMGPROXY_AUTO_WEBP", "true"),
+        ("GLOBAL_S3_BUCKET", external_s3_bucket),
+        ("STORAGE_TENANT_ID", storage_tenant),
+        ("REGION", external_s3_region),
+    ]
+)
+if storage_variant == "external-s3":
+    storage_values.extend(
+        [
+            ("STORAGE_S3_ENDPOINT", external_s3_endpoint),
+            ("STORAGE_S3_ACCESS_KEY_ID", external_s3_access_key),
+            ("STORAGE_S3_SECRET_ACCESS_KEY", external_s3_secret_key),
+            ("STORAGE_S3_REGION", external_s3_region),
+            ("STORAGE_S3_FORCE_PATH_STYLE", external_s3_force_path_style),
+        ]
+    )
+
 groups = [
     (
         "Core public URLs",
@@ -90,19 +247,7 @@ groups = [
     ),
     (
         "Postgres and pooling",
-        [
-            ("POSTGRES_PASSWORD", postgres_password),
-            ("SERVICE_PASSWORD_POSTGRES", postgres_password),
-            ("POSTGRES_HOST", "supabase-db"),
-            ("POSTGRES_HOSTNAME", "supabase-db"),
-            ("POSTGRES_DB", "postgres"),
-            ("POSTGRES_PORT", "5432"),
-            ("POOLER_DEFAULT_POOL_SIZE", "20"),
-            ("POOLER_MAX_CLIENT_CONN", "100"),
-            ("POOLER_TENANT_ID", pooler_tenant),
-            ("POOLER_POOL_MODE", "transaction"),
-            ("POOLER_DB_POOL_SIZE", "5"),
-        ],
+        postgres_values,
     ),
     (
         "JWT and API keys",
@@ -154,20 +299,8 @@ groups = [
         ],
     ),
     (
-        "Storage and MinIO",
-        [
-            ("S3_PROTOCOL_ACCESS_KEY_ID", s3_access_key),
-            ("S3_PROTOCOL_ACCESS_KEY_SECRET", s3_secret_key),
-            ("MINIO_ROOT_USER", minio_user),
-            ("MINIO_ROOT_PASSWORD", minio_password),
-            ("SERVICE_USER_MINIO", minio_user),
-            ("SERVICE_PASSWORD_MINIO", minio_password),
-            ("IMGPROXY_ENABLE_WEBP_DETECTION", "true"),
-            ("IMGPROXY_AUTO_WEBP", "true"),
-            ("GLOBAL_S3_BUCKET", bucket),
-            ("STORAGE_TENANT_ID", storage_tenant),
-            ("REGION", region),
-        ],
+        storage_group_title,
+        storage_values,
     ),
     (
         "PostgREST",
@@ -228,6 +361,8 @@ groups = [
 
 lines = [
     "# Generated Supabase environment.",
+    f"# Variant: {variant}",
+    f"# Storage: {storage_variant}",
     "# Do not commit this file.",
     "",
 ]
@@ -238,5 +373,5 @@ for title, values in groups:
     lines.append("")
 
 out.write_text("\n".join(lines).rstrip() + "\n")
-print(f"Wrote {out}")
+print(f"Wrote {out} for variant {variant} with {storage_variant} storage")
 PY
