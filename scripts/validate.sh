@@ -139,6 +139,38 @@ for template in templates:
         for local_storage_service in ("supabase-minio", "minio-createbucket"):
             if local_storage_service in services:
                 raise SystemExit(f"{template} must not include {local_storage_service}")
+    storage_service = services.get("supabase-storage")
+    if storage_service:
+        storage_env = storage_service.get("environment", [])
+        if isinstance(storage_env, list):
+            env_names = {str(item).split("=", 1)[0] for item in storage_env}
+        elif isinstance(storage_env, dict):
+            env_names = set(storage_env)
+        else:
+            env_names = set()
+        required_storage_s3 = {
+            "STORAGE_BACKEND",
+            "STORAGE_S3_BUCKET",
+            "STORAGE_S3_ENDPOINT",
+            "STORAGE_S3_FORCE_PATH_STYLE",
+            "STORAGE_S3_REGION",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+        }
+        missing_storage_s3 = sorted(required_storage_s3 - env_names)
+        if missing_storage_s3:
+            raise SystemExit(
+                f"{template} supabase-storage missing S3 env: "
+                + ", ".join(missing_storage_s3)
+            )
+        forbidden_storage_s3 = sorted(
+            env_names & {"GLOBAL_S3_ENDPOINT", "GLOBAL_S3_PROTOCOL", "GLOBAL_S3_FORCE_PATH_STYLE"}
+        )
+        if forbidden_storage_s3:
+            raise SystemExit(
+                f"{template} supabase-storage must use STORAGE_S3_* env, not: "
+                + ", ".join(forbidden_storage_s3)
+            )
 
 required_files = [
     "files/volumes/api/kong.yml",
