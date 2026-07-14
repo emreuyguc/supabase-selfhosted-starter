@@ -144,8 +144,6 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
             'minio_root_password = "${password:32}"',
             '"MINIO_ROOT_USER=${minio_root_user}",',
             '"MINIO_ROOT_PASSWORD=${minio_root_password}",',
-            '"SERVICE_USER_MINIO=${minio_root_user}",',
-            '"SERVICE_PASSWORD_MINIO=${minio_root_password}",',
         ]:
             text = text.replace(line + "\n", "")
     if external_db:
@@ -161,7 +159,7 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
     if external_s3:
         text = text.replace(
             's3_access_key_id = "${password:32}"',
-            's3_access_key_id = "${password:32}"\nstorage_s3_endpoint = "http://s3.example.com"\nstorage_s3_protocol = "http"\nstorage_s3_bucket = "supabase-storage"\nstorage_s3_access_key_id = "replace_with_external_s3_access_key"\nstorage_s3_secret_access_key = "replace_with_external_s3_secret_key"\nstorage_s3_region = "us-east-1"\nstorage_s3_force_path_style = "true"',
+            's3_access_key_id = "${password:32}"\nstorage_s3_endpoint = "http://s3.example.com"\nstorage_s3_bucket = "supabase-storage"\nstorage_s3_access_key_id = "replace_with_external_s3_access_key"\nstorage_s3_secret_access_key = "replace_with_external_s3_secret_key"\nstorage_s3_region = "us-east-1"\nstorage_s3_force_path_style = "true"',
         )
     if external_db:
         text = text.replace(
@@ -179,12 +177,12 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
         )
     if external_s3:
         text = text.replace(
-            '"GLOBAL_S3_BUCKET=supabase-storage"',
-            '"GLOBAL_S3_BUCKET=${storage_s3_bucket}"',
+            '"STORAGE_S3_BUCKET=supabase-storage"',
+            '"STORAGE_S3_BUCKET=${storage_s3_bucket}"',
         )
         text = text.replace(
-            '"REGION=us-east-1"',
-            '"REGION=${storage_s3_region}",\n"STORAGE_S3_ENDPOINT=${storage_s3_endpoint}",\n"STORAGE_S3_PROTOCOL=${storage_s3_protocol}",\n"STORAGE_S3_ACCESS_KEY_ID=${storage_s3_access_key_id}",\n"STORAGE_S3_SECRET_ACCESS_KEY=${storage_s3_secret_access_key}",\n"STORAGE_S3_REGION=${storage_s3_region}",\n"STORAGE_S3_FORCE_PATH_STYLE=${storage_s3_force_path_style}"',
+            '"STORAGE_S3_REGION=us-east-1"',
+            '"STORAGE_S3_REGION=${storage_s3_region}",\n"STORAGE_S3_ENDPOINT=${storage_s3_endpoint}",\n"STORAGE_S3_ACCESS_KEY_ID=${storage_s3_access_key_id}",\n"STORAGE_S3_SECRET_ACCESS_KEY=${storage_s3_secret_access_key}",\n"STORAGE_S3_FORCE_PATH_STYLE=${storage_s3_force_path_style}"',
         )
     return text
 
@@ -256,17 +254,11 @@ def apply_external_s3(data):
     remove_dependency(storage, "minio-createbucket")
     env = storage.get("environment", [])
     replacements = {
-        "SERVER_REGION=": "SERVER_REGION=${REGION}",
-        "REGION=": "REGION=${REGION}",
-        "GLOBAL_S3_BUCKET=": "GLOBAL_S3_BUCKET=${GLOBAL_S3_BUCKET}",
-        "GLOBAL_S3_ENDPOINT=": "GLOBAL_S3_ENDPOINT=${STORAGE_S3_ENDPOINT}",
-        "GLOBAL_S3_PROTOCOL=": "GLOBAL_S3_PROTOCOL=${STORAGE_S3_PROTOCOL}",
-        "GLOBAL_S3_FORCE_PATH_STYLE=": "GLOBAL_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}",
-        "STORAGE_S3_BUCKET=": "STORAGE_S3_BUCKET=${GLOBAL_S3_BUCKET}",
+        "SERVER_REGION=": "SERVER_REGION=${STORAGE_S3_REGION}",
+        "STORAGE_S3_BUCKET=": "STORAGE_S3_BUCKET=${STORAGE_S3_BUCKET}",
         "STORAGE_S3_ENDPOINT=": "STORAGE_S3_ENDPOINT=${STORAGE_S3_ENDPOINT}",
-        "STORAGE_S3_PROTOCOL=": "STORAGE_S3_PROTOCOL=${STORAGE_S3_PROTOCOL}",
         "STORAGE_S3_FORCE_PATH_STYLE=": "STORAGE_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}",
-        "STORAGE_S3_REGION=": "STORAGE_S3_REGION=${REGION}",
+        "STORAGE_S3_REGION=": "STORAGE_S3_REGION=${STORAGE_S3_REGION}",
         "AWS_ACCESS_KEY_ID=": "AWS_ACCESS_KEY_ID=${STORAGE_S3_ACCESS_KEY_ID}",
         "AWS_SECRET_ACCESS_KEY=": "AWS_SECRET_ACCESS_KEY=${STORAGE_S3_SECRET_ACCESS_KEY}",
     }
@@ -296,15 +288,18 @@ def external_compose(prebuilt=False, bootstrap=False, external_s3=False):
     data = copy.deepcopy(compose_data)
     services = data["services"]
     services.pop("supabase-db", None)
+    services.pop("supabase-db-passwords", None)
 
     for service in services.values():
         if isinstance(service, dict):
             remove_dependency(service, "supabase-db")
+            remove_dependency(service, "supabase-db-passwords")
 
     volumes = data.get("volumes")
     if isinstance(volumes, dict):
         volumes.pop("supabase-db-data", None)
         volumes.pop("supabase-db-config", None)
+        volumes.pop("supabase-db-socket", None)
 
     if bootstrap:
         add_bootstrap_service(data)

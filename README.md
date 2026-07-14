@@ -142,6 +142,7 @@ Generated from `manifest.yaml`.
 | `supabase-kong` | public-api-gateway | `kong/kong:3.9.1` | `true` |
 | `supabase-studio` | dashboard | `supabase/studio:2026.06.03-sha-0bca601` | `behind-kong-basic-auth` |
 | `supabase-db` | database | `supabase/postgres:17.6.1.136` | `false` |
+| `supabase-db-passwords` | database-role-password-sync | `supabase/postgres:17.6.1.136` | `false` |
 | `supabase-analytics` | analytics-logs | `supabase/logflare:1.31.2` | `false` |
 | `supabase-vector` | log-router | `timberio/vector:0.53.0-alpine` | `false` |
 | `supabase-auth` | auth | `supabase/gotrue:v2.189.0` | `via-kong` |

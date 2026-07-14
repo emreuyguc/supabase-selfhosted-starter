@@ -125,6 +125,7 @@ services:
     - JWT_EXP=${JWT_EXPIRY}
     volumes:
     - supabase-db-data:/var/lib/postgresql/data
+    - supabase-db-socket:/run/postgresql
     - type: bind
       source: ./files/volumes/db/realtime.sql
       target: /docker-entrypoint-initdb.d/migrations/99-realtime.sql
@@ -162,6 +163,30 @@ services:
       target: /docker-entrypoint-initdb.d/migrations/99-cron.sql
       read_only: true
     - supabase-db-config:/etc/postgresql-custom
+  supabase-db-passwords:
+    image: supabase/postgres:17.6.1.136
+    user: postgres
+    restart: "no"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+    - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    entrypoint:
+    - /bin/sh
+    - /sync-passwords.sh
+    volumes:
+    - supabase-db-socket:/run/postgresql
+    - type: bind
+      source: ./files/volumes/db/sync-passwords.sh
+      target: /sync-passwords.sh
+      read_only: true
+    - type: bind
+      source: ./files/volumes/db/sync-passwords.sql
+      target: /sync-passwords.sql
+      read_only: true
   supabase-analytics:
     image: supabase/logflare:1.31.2
     healthcheck:
@@ -173,8 +198,8 @@ services:
       interval: 5s
       retries: 10
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
     environment:
     - LOGFLARE_NODE_HOST=127.0.0.1
     - DB_USERNAME=supabase_admin
@@ -217,8 +242,8 @@ services:
   supabase-rest:
     image: postgrest/postgrest:v14.12
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
       supabase-analytics:
         condition: service_healthy
     environment:
@@ -245,8 +270,8 @@ services:
   supabase-auth:
     image: supabase/gotrue:v2.189.0
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
       supabase-analytics:
         condition: service_healthy
     healthcheck:
@@ -304,8 +329,8 @@ services:
     image: supabase/realtime:v2.102.3
     container_name: realtime-dev.${CONTAINER_PREFIX}.supabase-realtime
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
       supabase-analytics:
         condition: service_healthy
     healthcheck:
@@ -350,8 +375,8 @@ services:
   supabase-minio:
     image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
     environment:
-    - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
-    - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
+    - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+    - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     command: server --console-address ":9001" /data
     healthcheck:
       test:
@@ -368,9 +393,9 @@ services:
     image: minio/mc
     restart: 'no'
     environment:
-    - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
-    - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
-    - GLOBAL_S3_BUCKET=${GLOBAL_S3_BUCKET}
+    - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+    - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    - STORAGE_S3_BUCKET=${STORAGE_S3_BUCKET}
     depends_on:
       supabase-minio:
         condition: service_healthy
@@ -385,8 +410,8 @@ services:
   supabase-storage:
     image: supabase/storage-api:v1.60.4
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
       supabase-rest:
         condition: service_started
       imgproxy:
@@ -409,22 +434,17 @@ services:
     environment:
     - SERVER_PORT=5000
     - SERVER_REGION=local
-    - REGION=${REGION}
     - MULTI_TENANT=false
     - AUTH_JWT_SECRET=${SERVICE_PASSWORD_JWT}
     - DATABASE_URL=postgres://supabase_storage_admin:${SERVICE_PASSWORD_POSTGRES}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/${POSTGRES_DB}
     - DB_INSTALL_ROLES=false
     - STORAGE_BACKEND=s3
-    - GLOBAL_S3_BUCKET=${GLOBAL_S3_BUCKET}
-    - GLOBAL_S3_ENDPOINT=http://supabase-minio:9000
-    - GLOBAL_S3_PROTOCOL=http
-    - GLOBAL_S3_FORCE_PATH_STYLE=true
-    - STORAGE_S3_BUCKET=${GLOBAL_S3_BUCKET}
+    - STORAGE_S3_BUCKET=${STORAGE_S3_BUCKET}
     - STORAGE_S3_ENDPOINT=http://supabase-minio:9000
     - STORAGE_S3_FORCE_PATH_STYLE=true
-    - STORAGE_S3_REGION=us-east-1
-    - AWS_ACCESS_KEY_ID=${SERVICE_USER_MINIO}
-    - AWS_SECRET_ACCESS_KEY=${SERVICE_PASSWORD_MINIO}
+    - STORAGE_S3_REGION=${STORAGE_S3_REGION}
+    - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+    - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
     - S3_PROTOCOL_ACCESS_KEY_ID=${S3_PROTOCOL_ACCESS_KEY_ID}
     - S3_PROTOCOL_ACCESS_KEY_SECRET=${S3_PROTOCOL_ACCESS_KEY_SECRET}
     - UPLOAD_FILE_SIZE_LIMIT=524288000
@@ -468,8 +488,8 @@ services:
   supabase-meta:
     image: supabase/postgres-meta:v0.96.6
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
       supabase-analytics:
         condition: service_healthy
     environment:
@@ -531,8 +551,8 @@ services:
       retries: 10
       start_period: 30s
     depends_on:
-      supabase-db:
-        condition: service_healthy
+      supabase-db-passwords:
+        condition: service_completed_successfully
       supabase-analytics:
         condition: service_healthy
     environment:
@@ -568,5 +588,6 @@ services:
 volumes:
   supabase-db-data: null
   supabase-db-config: null
+  supabase-db-socket: null
   deno-cache: null
   supabase-minio-data: null

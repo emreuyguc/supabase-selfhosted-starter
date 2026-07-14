@@ -3,6 +3,10 @@ services:
     profiles:
     - full-only
 
+  supabase-db-passwords:
+    profiles:
+    - full-only
+
   supabase-analytics:
     depends_on: !reset []
 

@@ -3,6 +3,10 @@ services:
     profiles:
     - full-only
 
+  supabase-db-passwords:
+    profiles:
+    - full-only
+
   supabase-db-bootstrap:
     image: supabase/postgres:17.6.1.136
     restart: "no"
