@@ -150,6 +150,10 @@ for template in templates:
             env_names = set()
         required_storage_s3 = {
             "STORAGE_BACKEND",
+            "GLOBAL_S3_BUCKET",
+            "GLOBAL_S3_ENDPOINT",
+            "GLOBAL_S3_PROTOCOL",
+            "GLOBAL_S3_FORCE_PATH_STYLE",
             "STORAGE_S3_BUCKET",
             "STORAGE_S3_ENDPOINT",
             "STORAGE_S3_FORCE_PATH_STYLE",
@@ -163,14 +167,8 @@ for template in templates:
                 f"{template} supabase-storage missing S3 env: "
                 + ", ".join(missing_storage_s3)
             )
-        forbidden_storage_s3 = sorted(
-            env_names & {"GLOBAL_S3_ENDPOINT", "GLOBAL_S3_PROTOCOL", "GLOBAL_S3_FORCE_PATH_STYLE"}
-        )
-        if forbidden_storage_s3:
-            raise SystemExit(
-                f"{template} supabase-storage must use STORAGE_S3_* env, not: "
-                + ", ".join(forbidden_storage_s3)
-            )
+        if "external-s3" in template.name and "STORAGE_S3_PROTOCOL" not in env_names:
+            raise SystemExit(f"{template} supabase-storage missing STORAGE_S3_PROTOCOL")
 
 required_files = [
     "files/volumes/api/kong.yml",

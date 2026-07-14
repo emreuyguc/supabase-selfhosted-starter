@@ -74,6 +74,7 @@ import string
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 out = Path(sys.argv[1])
 variant = sys.argv[2]
@@ -150,6 +151,7 @@ if storage_variant == "external-s3":
     external_s3_bucket = required_env("GLOBAL_S3_BUCKET")
     external_s3_region = os.environ.get("STORAGE_S3_REGION", os.environ.get("REGION", "us-east-1"))
     external_s3_force_path_style = os.environ.get("STORAGE_S3_FORCE_PATH_STYLE", "true")
+    external_s3_protocol = os.environ.get("STORAGE_S3_PROTOCOL") or urlparse(external_s3_endpoint).scheme or "https"
 else:
     external_s3_endpoint = ""
     external_s3_access_key = ""
@@ -157,6 +159,7 @@ else:
     external_s3_bucket = bucket
     external_s3_region = region
     external_s3_force_path_style = "true"
+    external_s3_protocol = "http"
 jwt_secret = token(48)
 anon_key = jwt("anon", jwt_secret)
 service_role_key = jwt("service_role", jwt_secret)
@@ -228,7 +231,11 @@ storage_values.extend(
 if storage_variant == "external-s3":
     storage_values.extend(
         [
+            ("GLOBAL_S3_ENDPOINT", external_s3_endpoint),
+            ("GLOBAL_S3_PROTOCOL", external_s3_protocol),
+            ("GLOBAL_S3_FORCE_PATH_STYLE", external_s3_force_path_style),
             ("STORAGE_S3_ENDPOINT", external_s3_endpoint),
+            ("STORAGE_S3_PROTOCOL", external_s3_protocol),
             ("STORAGE_S3_ACCESS_KEY_ID", external_s3_access_key),
             ("STORAGE_S3_SECRET_ACCESS_KEY", external_s3_secret_key),
             ("STORAGE_S3_REGION", external_s3_region),
