@@ -30,7 +30,7 @@ lines = [
     f"| Starter version | `{manifest['starter_version']}` |",
     f"| Last updated | `{manifest['last_updated']}` |",
     f"| Repository type | `{manifest['repository_type']}` |",
-    f"| Canonical Compose | `{manifest['canonical_compose']}` |",
+    f"| Canonical base Compose | `{manifest.get('base_compose', manifest['canonical_compose'])}` |",
     f"| Production override | `{manifest['production_override']}` |",
     f"| Env example | `{manifest['env_example']}` |",
     f"| Runtime tests | `{manifest['runtime_tests']}` |",

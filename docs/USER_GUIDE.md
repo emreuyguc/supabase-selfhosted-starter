@@ -21,7 +21,7 @@ Primary artifacts:
 | `.env.example` | Complete non-secret env inventory |
 | `.env.<variant>.example` | Variant-specific env examples |
 | `files/` | Supabase config, SQL init files, Edge Functions, Kong, Vector and pooler files |
-| `dokploy/template.json` | Generated Dokploy import template |
+| `dokploy/templates/*.json` | Generated Dokploy import templates |
 | `dokploy/templates/*.json` | Generated Dokploy variant import templates |
 | `scripts/README.md` | Env generation, render, validation, backup and restore helpers |
 | `dokploy/README.md` | Dokploy template generation and import behavior |
@@ -63,7 +63,7 @@ Validation checks:
 
 - root and variant Compose syntax;
 - production override syntax for supported variants;
-- Dokploy template JSON;
+- Dokploy import JSON;
 - embedded Dokploy Compose syntax;
 - required bind-mounted files.
 

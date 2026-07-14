@@ -10,7 +10,7 @@ Keep script-specific behavior documented here instead of spreading detailed scri
 |---|---|---|
 | `validate.sh` | `make validate` | Static validation for variant Compose, README summary, Dokploy JSON and required files |
 | `render-readme.sh` | `make render-readme` | Regenerate README system/service summary from `manifest.yaml` |
-| `render-dokploy.sh` | `make render-dokploy`, `make -C dokploy render-all` | Regenerate `dokploy/template.json` and `dokploy/templates/*.json` from canonical sources |
+| `render-dokploy.sh` | `make render-dokploy`, `make -C dokploy render-all` | Regenerate `dokploy/templates/*.json` from canonical sources |
 | `generate-env.sh` | `make generate-env` | Generate `.env` with strong local secrets |
 | `backup-postgres.sh` | `make backup-postgres` | Create a Postgres dump under `backups/` |
 | `restore-postgres.sh` | none | Restore a Postgres dump; requires `CONFIRM_RESTORE=1` |

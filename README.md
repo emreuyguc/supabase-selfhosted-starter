@@ -55,16 +55,15 @@ npm --prefix tests/runtime test
 Use the generated Dokploy import template matching the target topology:
 
 ```text
-dokploy/template.json
-dokploy/templates/full.json
+dokploy/templates/full-local.json
 dokploy/templates/full-external-s3.json
-dokploy/templates/external-db.json
+dokploy/templates/external-db-local.json
 dokploy/templates/external-db-external-s3.json
-dokploy/templates/external-prebuilt.json
+dokploy/templates/external-prebuilt-local.json
 dokploy/templates/external-prebuilt-external-s3.json
 ```
 
-If you changed `compose.yaml`, `files/` or `dokploy/config.toml`, regenerate it first:
+If you changed the base Compose file, variant overlays, `files/` or `dokploy/config.toml`, regenerate first:
 
 ```sh
 make -C dokploy render-all
@@ -76,7 +75,7 @@ Build a selected Dokploy template:
 make -C dokploy render-template VARIANT=external-db STORAGE=external-s3
 ```
 
-Then import the selected file in Dokploy. `dokploy/template.json` is kept as the full-stack compatibility artifact.
+Then import the selected file in Dokploy.
 
 Dokploy-specific variables, domains and env mappings are defined in:
 
@@ -84,7 +83,7 @@ Dokploy-specific variables, domains and env mappings are defined in:
 dokploy/config.toml
 ```
 
-The template embeds required files from `files/` as Dokploy mounts, so do not edit `dokploy/template.json` by hand.
+The templates embed required files from `files/` as Dokploy mounts, so do not edit generated JSON files by hand.
 
 ## Common commands
 
@@ -109,12 +108,12 @@ The template embeds required files from `files/` as Dokploy mounts, so do not ed
 | Starter version | `0.1.0` |
 | Last updated | `2026-07-14` |
 | Repository type | `single-app-template` |
-| Canonical Compose | `compose.yaml` |
+| Canonical base Compose | `compose.yaml` |
 | Production override | `compose.prod.yaml` |
 | Env example | `.env.example` |
 | Runtime tests | `tests/runtime` |
 | Test framework | `vitest` |
-| Dokploy artifact | `dokploy/template.json` |
+| Dokploy artifact | `dokploy/templates/full-local.json` |
 
 ## Variant inventory
 
@@ -132,7 +131,7 @@ Generated from `manifest.yaml`.
 
 | Overlay | Status | Topology | Env example |
 |---|---|---|---|
-| `external-s3` | supported-feature-overlay | external-object-storage | `.env.external-s3.example` |
+| `external-s3` | base-compose | external-object-storage | `.env.external-s3.example` |
 
 ## Service inventory
 
@@ -174,7 +173,7 @@ Generated from `manifest.yaml`.
 | `.env.external-prebuilt.example` | External preconfigured DB env example |
 | `.env.external-s3.example` | External S3 env example |
 | `files/` | Supabase runtime config, init SQL, Edge Functions, Kong, Vector and pooler files |
-| `dokploy/template.json` | Generated Dokploy import template |
+| `dokploy/templates/*.json` | Generated Dokploy import templates |
 | `dokploy/templates/*.json` | Generated Dokploy variant templates |
 | `manifest.yaml` | Machine-readable source for versions, services, features and validation commands |
 | `scripts/README.md` | Script usage, inputs, outputs and safety notes |
