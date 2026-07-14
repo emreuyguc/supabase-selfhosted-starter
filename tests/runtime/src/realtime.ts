@@ -166,12 +166,10 @@ export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ 
   }
 
   const reader = new SocketReader(socket, leftover)
-  const join = [
-    '1',
-    '1',
-    'realtime:public:codex_probe',
-    'phx_join',
-    {
+  const join = {
+    topic: 'realtime:public:codex_probe',
+    event: 'phx_join',
+    payload: {
       config: {
         broadcast: { self: false },
         presence: { key: '' },
@@ -179,7 +177,8 @@ export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ 
       },
       access_token: anonKey,
     },
-  ]
+    ref: '1',
+  }
 
   sendTextFrame(socket, JSON.stringify(join))
   const message = await readTextFrame(reader)
