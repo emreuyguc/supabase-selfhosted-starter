@@ -1,6 +1,1 @@
-# Explicit full-stack variant overlay.
-#
-# The current canonical compose.yaml already contains the local Postgres,
-# local MinIO and init-SQL topology. This file exists so operators can use the
-# same variant command shape as external variants.
-services: {}
+compose.internal-db.yaml

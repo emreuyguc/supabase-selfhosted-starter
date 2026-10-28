@@ -1,11 +1,12 @@
 #!/usr/bin/env sh
 set -eu
+umask 077
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 OUTPUT_ENV="${OUTPUT_ENV:-$ROOT_DIR/.env}"
 FORCE="${FORCE:-0}"
-VARIANT="${VARIANT:-full}"
-STORAGE="${STORAGE:-local}"
+VARIANT="${VARIANT:-internal-db}"
+STORAGE="${STORAGE:-minio}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -41,19 +42,23 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  full|external-db|external-prebuilt) ;;
+  full) VARIANT=internal-db ;;
+  external-db) VARIANT=external-db-bootstrap ;;
+  external-prebuilt) VARIANT=external-db-existing ;;
+  internal-db|external-db-bootstrap|external-db-existing) ;;
   *)
     echo "Unsupported variant: $VARIANT" >&2
-    echo "Supported variants: full, external-db, external-prebuilt" >&2
+    echo "Supported variants: internal-db, external-db-bootstrap, external-db-existing" >&2
     exit 1
     ;;
 esac
 
 case "$STORAGE" in
-  local|external-s3) ;;
+  local) STORAGE=minio ;;
+  minio|external-s3) ;;
   *)
     echo "Unsupported storage: $STORAGE" >&2
-    echo "Supported storage: local, external-s3" >&2
+    echo "Supported storage: minio, external-s3" >&2
     exit 1
     ;;
 esac
@@ -116,14 +121,16 @@ def required_env(name: str) -> str:
 
 
 public_url = os.environ.get("SUPABASE_PUBLIC_URL", "http://localhost:8000").rstrip("/")
+api_external_url = os.environ.get("API_EXTERNAL_URL", f"{public_url}/auth/v1").rstrip("/")
+site_url = os.environ.get("SITE_URL", "http://localhost:3000").rstrip("/")
 container_prefix = os.environ.get("CONTAINER_PREFIX", "supabase")
 dashboard_user = os.environ.get("DASHBOARD_USERNAME", "supabase")
 minio_user = os.environ.get("MINIO_ROOT_USER", "supabase")
-bucket = os.environ.get("STORAGE_S3_BUCKET", "stub")
+bucket = os.environ.get("STORAGE_S3_BUCKET", "supabase-storage")
 storage_tenant = os.environ.get("STORAGE_TENANT_ID", "stub")
 storage_s3_region = os.environ.get("STORAGE_S3_REGION", "us-east-1")
 
-if variant == "full":
+if variant == "internal-db":
     postgres_password = token(40)
     postgres_host = os.environ.get("POSTGRES_HOST", "supabase-db")
     postgres_hostname = os.environ.get("POSTGRES_HOSTNAME", postgres_host)
@@ -140,8 +147,8 @@ postgres_db_owner = os.environ.get("POSTGRES_DB_OWNER", "supabase_admin")
 postgres_bootstrap_db = os.environ.get("POSTGRES_BOOTSTRAP_DB", "postgres")
 postgres_bootstrap_user = os.environ.get("POSTGRES_BOOTSTRAP_USER", "postgres")
 postgres_bootstrap_password = os.environ.get("POSTGRES_BOOTSTRAP_PASSWORD")
-if variant == "external-db" and not postgres_bootstrap_password:
-    raise SystemExit("POSTGRES_BOOTSTRAP_PASSWORD is required for the external-db variant")
+if variant == "external-db-bootstrap" and not postgres_bootstrap_password:
+    raise SystemExit("POSTGRES_BOOTSTRAP_PASSWORD is required for the external-db-bootstrap variant")
 
 if storage_variant == "external-s3":
     external_s3_endpoint = required_env("STORAGE_S3_ENDPOINT")
@@ -157,22 +164,29 @@ else:
     external_s3_bucket = bucket
     external_s3_region = storage_s3_region
     external_s3_force_path_style = "true"
-jwt_secret = token(48)
-anon_key = jwt("anon", jwt_secret)
-service_role_key = jwt("service_role", jwt_secret)
+def existing(name: str, alias: str = "") -> str:
+    value = os.environ.get(name) or (os.environ.get(alias) if alias else None)
+    if not value:
+        raise SystemExit(f"{name} is required for external-db-existing; preserve the restored deployment's credentials")
+    return value
+
+
+jwt_secret = existing("JWT_SECRET", "SERVICE_PASSWORD_JWT") if variant == "external-db-existing" else token(48)
+anon_key = existing("ANON_KEY", "SERVICE_SUPABASEANON_KEY") if variant == "external-db-existing" else jwt("anon", jwt_secret)
+service_role_key = existing("SERVICE_ROLE_KEY", "SERVICE_SUPABASESERVICE_KEY") if variant == "external-db-existing" else jwt("service_role", jwt_secret)
 dashboard_password = token(40)
 logflare_public = token(32)
 logflare_private = token(32)
-secret_key_base = token(64)
-vault_enc_key = token(32)
-pg_meta_crypto_key = token(32)
-realtime_db_enc_key = token(16)
-s3_access_key = token(32)
-s3_secret_key = token(64)
-minio_password = token(40)
-publishable_key = "sb_publishable_" + token(48)
-secret_key = "sb_secret_" + token(72)
-pooler_tenant = token(12)
+secret_key_base = existing("SECRET_KEY_BASE", "SERVICE_PASSWORD_SUPAVISORSECRET") if variant == "external-db-existing" else token(64)
+vault_enc_key = existing("VAULT_ENC_KEY", "SERVICE_PASSWORD_VAULTENC") if variant == "external-db-existing" else token(32)
+pg_meta_crypto_key = existing("PG_META_CRYPTO_KEY", "SERVICE_PASSWORD_PGMETACRYPTO") if variant == "external-db-existing" else token(32)
+realtime_db_enc_key = existing("REALTIME_DB_ENC_KEY") if variant == "external-db-existing" else token(16)
+s3_access_key = existing("S3_PROTOCOL_ACCESS_KEY_ID") if variant == "external-db-existing" else token(32)
+s3_secret_key = existing("S3_PROTOCOL_ACCESS_KEY_SECRET") if variant == "external-db-existing" else token(64)
+minio_password = existing("MINIO_ROOT_PASSWORD") if variant == "external-db-existing" and storage_variant == "minio" else token(40)
+publishable_key = existing("SUPABASE_PUBLISHABLE_KEY") if variant == "external-db-existing" else "sb_publishable_" + token(48)
+secret_key = existing("SUPABASE_SECRET_KEY") if variant == "external-db-existing" else "sb_secret_" + token(72)
+pooler_tenant = existing("POOLER_TENANT_ID") if variant == "external-db-existing" else token(12)
 
 postgres_values = [
     ("POSTGRES_PASSWORD", postgres_password),
@@ -182,7 +196,7 @@ postgres_values = [
     ("POSTGRES_DB", postgres_db),
     ("POSTGRES_PORT", postgres_port),
 ]
-if variant == "external-db":
+if variant == "external-db-bootstrap":
     postgres_values.extend(
         [
             ("POSTGRES_DB_OWNER", postgres_db_owner),
@@ -206,7 +220,7 @@ storage_values = [
     ("S3_PROTOCOL_ACCESS_KEY_SECRET", s3_secret_key),
 ]
 storage_group_title = "Storage and external S3"
-if storage_variant == "local":
+if storage_variant == "minio":
     storage_group_title = "Storage and MinIO"
     storage_values.extend(
         [
@@ -239,7 +253,9 @@ groups = [
         [
             ("CONTAINER_PREFIX", container_prefix),
             ("SUPABASE_PUBLIC_URL", public_url),
-            ("ADDITIONAL_REDIRECT_URLS", f"{public_url}/*,http://localhost:3000/*"),
+            ("API_EXTERNAL_URL", api_external_url),
+            ("SITE_URL", site_url),
+            ("ADDITIONAL_REDIRECT_URLS", os.environ.get("ADDITIONAL_REDIRECT_URLS", f"{public_url}/*,{site_url}/*")),
         ],
     ),
     (
@@ -279,7 +295,6 @@ groups = [
             ("LOGFLARE_PRIVATE_ACCESS_TOKEN", logflare_private),
             ("SERVICE_PASSWORD_LOGFLARE", logflare_public),
             ("SERVICE_PASSWORD_LOGFLAREPRIVATE", logflare_private),
-            ("LOGFLARE_API_KEY", logflare_public),
             ("DOCKER_SOCKET_LOCATION", "/var/run/docker.sock"),
         ],
     ),
@@ -302,7 +317,7 @@ groups = [
     (
         "PostgREST",
         [
-            ("PGRST_DB_SCHEMAS", "public,storage,graphql_public"),
+            ("PGRST_DB_SCHEMAS", "public,graphql_public"),
             ("PGRST_DB_MAX_ROWS", "1000"),
             ("PGRST_DB_EXTRA_SEARCH_PATH", "public"),
         ],
@@ -310,7 +325,7 @@ groups = [
     (
         "Auth signup and mail",
         [
-            ("DISABLE_SIGNUP", "false"),
+            ("DISABLE_SIGNUP", "true"),
             ("ENABLE_EMAIL_SIGNUP", "false"),
             ("ENABLE_EMAIL_AUTOCONFIRM", "false"),
             ("ENABLE_ANONYMOUS_USERS", "false"),
@@ -342,14 +357,15 @@ groups = [
         "Edge Functions",
         [
             ("FUNCTIONS_VERIFY_JWT", "false"),
+            ("SUPABASE_JWKS", os.environ.get("SUPABASE_JWKS", "")),
         ],
     ),
     (
         "Kong tuning",
         [
-            ("KONG_STORAGE_CONNECT_TIMEOUT", "60"),
-            ("KONG_STORAGE_WRITE_TIMEOUT", "3600"),
-            ("KONG_STORAGE_READ_TIMEOUT", "3600"),
+            ("KONG_STORAGE_CONNECT_TIMEOUT", "60000"),
+            ("KONG_STORAGE_WRITE_TIMEOUT", "3600000"),
+            ("KONG_STORAGE_READ_TIMEOUT", "3600000"),
             ("KONG_STORAGE_REQUEST_BUFFERING", "false"),
             ("KONG_STORAGE_RESPONSE_BUFFERING", "false"),
         ],
@@ -370,5 +386,6 @@ for title, values in groups:
     lines.append("")
 
 out.write_text("\n".join(lines).rstrip() + "\n")
+out.chmod(0o600)
 print(f"Wrote {out} for variant {variant} with {storage_variant} storage")
 PY

@@ -1,17 +1,45 @@
-#!/bin/bash
+#!/bin/sh
 # Custom entrypoint for Kong that builds Lua expressions for request-transformer
 # and performs environment variable substitution in the declarative config.
 
-# Support modern opaque Supabase API keys at the gateway while keeping legacy JWTs as
-# the internal source-of-truth for GoTrue/PostgREST/Realtime compatibility.
+# Build Lua expressions for translating opaque API keys to compatibility JWTs.
+# When opaque keys are not configured (empty env vars), expressions fall through
+# to legacy-only behavior - just passing apikey as-is.
+#
+# Full expression logic (when opaque keys are configured):
+#   1. If Authorization header exists and is NOT an sb_ key -> pass through (user session JWT)
+#   2. If apikey matches secret key -> set service_role compatibility JWT internal "API key"
+#   3. If apikey matches publishable key -> set anon compatibility JWT internal "API key"
+#   4. Fallback: pass apikey as-is (legacy HS256 JWT)
+
 if [ -n "$SUPABASE_SECRET_KEY" ] && [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
+    # Opaque keys configured -> full translation expressions
     export LUA_AUTH_EXPR="\$((headers.authorization ~= nil and headers.authorization:sub(1, 10) ~= 'Bearer sb_' and headers.authorization) or (headers.apikey == '$SUPABASE_SECRET_KEY' and 'Bearer $SUPABASE_SERVICE_KEY') or (headers.apikey == '$SUPABASE_PUBLISHABLE_KEY' and 'Bearer $SUPABASE_ANON_KEY') or headers.apikey)"
+
+    # Realtime WebSocket: reads from query_params.apikey (supabase-js sends apikey
+    # via query string), outputs to x-api-key header which Realtime checks first.
     export LUA_RT_WS_EXPR="\$((query_params.apikey == '$SUPABASE_SECRET_KEY' and '$SUPABASE_SERVICE_KEY') or (query_params.apikey == '$SUPABASE_PUBLISHABLE_KEY' and '$SUPABASE_ANON_KEY') or query_params.apikey)"
+
+    # Functions: translate opaque sb_ keys to the pre-signed internal asymmetric
+    # JWT and emit it as a raw `sb-api-key` header (no Bearer prefix), leaving
+    # Authorization untouched. The key is read from the apikey header or an
+    # Authorization `Bearer sb_...` fallback (header only, matching platform
+    # behavior. On no match the expression yields nil (rendered as an empty
+    # header) which the route's post-function then strips.
+    export LUA_FUNCTIONS_EXPR="\$((headers.apikey == '$SUPABASE_SECRET_KEY' and '$SUPABASE_SERVICE_KEY') or (headers.apikey == '$SUPABASE_PUBLISHABLE_KEY' and '$SUPABASE_ANON_KEY') or (headers.authorization == 'Bearer $SUPABASE_SECRET_KEY' and '$SUPABASE_SERVICE_KEY') or (headers.authorization == 'Bearer $SUPABASE_PUBLISHABLE_KEY' and '$SUPABASE_ANON_KEY') or nil)"
 else
+    # Legacy API keys, not sb_ API keys -> pass apikey through unchanged
     export LUA_AUTH_EXPR="\$((headers.authorization ~= nil and headers.authorization:sub(1, 10) ~= 'Bearer sb_' and headers.authorization) or headers.apikey)"
     export LUA_RT_WS_EXPR="\$(query_params.apikey)"
+
+    # Functions: no opaque keys configured -> never set sb-api-key (the empty
+    # value is stripped by the route's post-function).
+    export LUA_FUNCTIONS_EXPR="\$(nil)"
 fi
 
+# Substitute environment variables in the Kong declarative config.
+# Uses awk instead of eval/echo to preserve YAML quoting (eval strips double
+# quotes, breaking "Header: value" patterns that YAML parses as mappings).
 awk '{
   result = ""
   rest = $0
@@ -27,6 +55,7 @@ awk '{
   print result rest
 }' /home/kong/temp.yml > "$KONG_DECLARATIVE_CONFIG"
 
+# Remove empty key-auth credentials (unconfigured opaque keys)
 sed -i '/^[[:space:]]*- key:[[:space:]]*$/d' "$KONG_DECLARATIVE_CONFIG"
 
 exec /entrypoint.sh kong docker-start

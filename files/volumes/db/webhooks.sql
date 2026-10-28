@@ -206,3 +206,6 @@ ALTER function supabase_functions.http_request() SET search_path = supabase_func
 REVOKE ALL ON FUNCTION supabase_functions.http_request() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION supabase_functions.http_request() TO postgres, anon, authenticated, service_role;
 COMMIT;
+
+-- Webhook role needs access to extension-defined types.
+GRANT USAGE ON SCHEMA extensions TO supabase_functions_admin;

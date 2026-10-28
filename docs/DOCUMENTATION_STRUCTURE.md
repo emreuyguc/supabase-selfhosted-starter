@@ -16,6 +16,7 @@ Current structure:
 |---|---|
 | `README.md` | Short entrypoint and artifact map |
 | `docs/USER_GUIDE.md` | Full human-facing usage and operation guide |
+| `docs/UPGRADE.md` | Snapshot-specific configuration, database migration and compatibility decisions |
 | `docs/STARTER_KIT_AI_RULES.md` | Generic AI checklist/rules for starter-kit repositories |
 | `docs/SUPABASE_AI_GUIDE.md` | Supabase-specific AI/development guide |
 | `docs/DOCUMENTATION_STRUCTURE.md` | Records this documentation policy |
@@ -47,3 +48,8 @@ The new structure separates by audience and stability:
 - Keep app-specific operational details out of the generic rulebook.
 - Keep layer-specific commands in the layer README.
 - Keep `README.md` short; detailed usage belongs in `docs/USER_GUIDE.md`.
+
+The upgrade guide is separate because existing deployments must preserve secrets
+and review one-way migrations; these version-specific actions should remain
+reviewable independently of the general fresh-install guide. Verification results
+for the refreshed snapshot live in `tests/README.md`, beside the test entrypoint.

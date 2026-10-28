@@ -1,8 +1,8 @@
 name: supabase-self-hosted-starter
 app: supabase
 repository_type: single-app-template
-starter_version: 0.1.0
-last_updated: 2026-07-14
+starter_version: 0.2.0
+last_updated: 2026-10-28
 base_compose: compose.yaml
 canonical_compose: compose.yaml
 production_override: compose.prod.yaml
@@ -11,22 +11,22 @@ runtime_tests: tests/runtime
 test_framework: vitest
 
 platform_templates:
-  dokploy: dokploy/templates/full-local.json
+  dokploy: dokploy/templates/internal-db-minio.json
   dokploy_variants:
-    full-local: dokploy/templates/full-local.json
-    full-external-s3: dokploy/templates/full-external-s3.json
-    external-db-local: dokploy/templates/external-db-local.json
-    external-db-external-s3: dokploy/templates/external-db-external-s3.json
-    external-prebuilt-local: dokploy/templates/external-prebuilt-local.json
-    external-prebuilt-external-s3: dokploy/templates/external-prebuilt-external-s3.json
+    internal-db-minio: dokploy/templates/internal-db-minio.json
+    internal-db-external-s3: dokploy/templates/internal-db-external-s3.json
+    external-db-bootstrap-minio: dokploy/templates/external-db-bootstrap-minio.json
+    external-db-bootstrap-external-s3: dokploy/templates/external-db-bootstrap-external-s3.json
+    external-db-existing-minio: dokploy/templates/external-db-existing-minio.json
+    external-db-existing-external-s3: dokploy/templates/external-db-existing-external-s3.json
 
 services:
   supabase-kong:
-    image: kong/kong:3.9.1
+    image: kong/kong:3.9.3
     role: public-api-gateway
     public: true
   supabase-studio:
-    image: supabase/studio:2026.06.03-sha-0bca601
+    image: supabase/studio:2026.10.12-sha-3699278
     role: dashboard
     public: behind-kong-basic-auth
   supabase-db:
@@ -37,7 +37,7 @@ services:
       - supabase-db-data
       - supabase-db-config
   supabase-analytics:
-    image: supabase/logflare:1.31.2
+    image: supabase/logflare:1.50.15
     role: analytics-logs
     public: false
   supabase-vector:
@@ -45,19 +45,19 @@ services:
     role: log-router
     public: false
   supabase-auth:
-    image: supabase/gotrue:v2.189.0
+    image: supabase/gotrue:v2.197.0
     role: auth
     public: via-kong
   supabase-rest:
-    image: postgrest/postgrest:v14.12
+    image: postgrest/postgrest:v14.18
     role: rest-api
     public: via-kong
   realtime-dev:
-    image: supabase/realtime:v2.102.3
+    image: supabase/realtime:v2.143.3
     role: realtime
     public: via-kong
   supabase-storage:
-    image: supabase/storage-api:v1.60.4
+    image: supabase/storage-api:v1.81.0
     role: storage-api
     public: via-kong
   supabase-minio:
@@ -67,23 +67,23 @@ services:
     persistent_volumes:
       - supabase-minio-data
   minio-createbucket:
-    image: minio/mc
+    image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
     role: object-storage-bootstrap
     public: false
   supabase-edge-functions:
-    image: supabase/edge-runtime:v1.74.0
+    image: supabase/edge-runtime:v1.77.4
     role: edge-functions
     public: via-kong
   imgproxy:
-    image: darthsim/imgproxy:v3.30.1
+    image: darthsim/imgproxy:v3.31.4
     role: image-transformer
     public: false
   supabase-meta:
-    image: supabase/postgres-meta:v0.96.6
+    image: supabase/postgres-meta:v0.100.0
     role: postgres-admin-api
     public: via-kong-admin-acl
   supabase-supavisor:
-    image: supabase/supavisor:2.9.5
+    image: supabase/supavisor:2.9.13
     role: connection-pooler
     public: false
 
@@ -96,33 +96,33 @@ features:
   external_s3: compose.features.external-s3.yaml
 
 variants:
-  full:
+  internal-db:
     status: current-default
-    topology: local-postgres-local-minio
-    env_example: .env.full.example
+    topology: internal-postgres
+    env_example: .env.internal-db.example
     compose_files:
       - compose.yaml
-      - compose.full.yaml
+      - compose.internal-db.yaml
       - compose.prod.yaml
-    env_generation: scripts/generate-env.sh --variant full
-  external-db:
+    env_generation: scripts/generate-env.sh --variant internal-db
+  external-db-bootstrap:
     status: supported-compose-overlay
     topology: external-postgres-with-bootstrap
-    env_example: .env.external-db.example
+    env_example: .env.external-db-bootstrap.example
     compose_files:
       - compose.yaml
-      - compose.external-db.yaml
+      - compose.external-db-bootstrap.yaml
       - compose.prod.yaml
-    env_generation: scripts/generate-env.sh --variant external-db
-  external-prebuilt:
+    env_generation: scripts/generate-env.sh --variant external-db-bootstrap
+  external-db-existing:
     status: supported-compose-overlay
-    topology: external-postgres-managed-pooler-runtime-only
-    env_example: .env.external-prebuilt.example
+    topology: existing-external-postgres-managed-pooler
+    env_example: .env.external-db-existing.example
     compose_files:
       - compose.yaml
-      - compose.external-prebuilt.yaml
+      - compose.external-db-existing.yaml
       - compose.prod.yaml
-    env_generation: scripts/generate-env.sh --variant external-prebuilt
+    env_generation: scripts/generate-env.sh --variant external-db-existing
 
 feature_overlays:
   external-s3:
@@ -134,11 +134,14 @@ feature_overlays:
 
 required_runtime_validation:
   - docker compose --env-file .env.example -f compose.yaml config --quiet
-  - docker compose --env-file .env.full.example -f compose.yaml -f compose.full.yaml config --quiet
-  - docker compose --env-file .env.external-db.example -f compose.yaml -f compose.external-db.yaml config --quiet
-  - docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --quiet
-  - docker compose --env-file .env.external-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml config --quiet
+  - docker compose --env-file .env.internal-db.example -f compose.yaml -f compose.internal-db.yaml config --quiet
+  - docker compose --env-file .env.external-db-bootstrap.example -f compose.yaml -f compose.external-db-bootstrap.yaml config --quiet
+  - docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml config --quiet
+  - docker compose --env-file .env.external-db-bootstrap.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db-bootstrap.yaml -f compose.features.external-s3.yaml config --quiet
   - docker compose --env-file .env.example -f compose.yaml -f compose.prod.yaml config --quiet
-  - python3 -m json.tool dokploy/templates/full-local.json
+  - python3 -m json.tool dokploy/templates/internal-db-minio.json
   - npm --prefix tests/runtime run typecheck
   - ./scripts/validate.sh
+
+upstream_ref: self-hosted/v0.8.3
+upstream_commit: bc27d2661edd09a5d0b8d76ce33da6d4071a756e

@@ -18,7 +18,6 @@ required POSTGRES_BOOTSTRAP_PASSWORD
 required POSTGRES_DB
 required POSTGRES_DB_OWNER
 required SERVICE_PASSWORD_POSTGRES
-required SERVICE_PASSWORD_JWT
 required JWT_EXPIRY
 
 export PGHOST="$POSTGRES_HOSTNAME"
@@ -27,7 +26,6 @@ export PGDATABASE="$POSTGRES_BOOTSTRAP_DB"
 export PGUSER="$POSTGRES_BOOTSTRAP_USER"
 export PGPASSWORD="$POSTGRES_BOOTSTRAP_PASSWORD"
 export POSTGRES_PASSWORD="$SERVICE_PASSWORD_POSTGRES"
-export JWT_SECRET="$SERVICE_PASSWORD_JWT"
 export JWT_EXP="$JWT_EXPIRY"
 
 echo "Checking external DB extension availability..."
@@ -47,6 +45,10 @@ BEGIN
 
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'External Postgres is missing required Supabase extensions: %', missing;
+  END IF;
+
+  IF NOT has_table_privilege(current_user, 'pg_authid', 'SELECT') THEN
+    RAISE EXCEPTION 'Bootstrap owner must read pg_authid for the managed Supavisor auth function; this provider is not supported';
   END IF;
 END
 $$;

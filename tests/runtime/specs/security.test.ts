@@ -1,4 +1,4 @@
-import { describe, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { config, requireAnonKey, requireServiceRoleKey } from '../src/env.js'
 import { apiRequest, expectOk, expectStatus } from '../src/http.js'
 
@@ -20,7 +20,23 @@ describe('security', () => {
     }
   })
 
-  test('MCP direct access is blocked', async () => {
-    expectStatus(await apiRequest('/api/mcp'), [401, 403], 'mcp direct access blocked')
+  test('MCP and Realtime management endpoints are blocked', async () => {
+    for (const path of ['/api/mcp', '/mcp', '/realtime/v1/api/tenants', '/realtime/v1/api/openapi']) {
+      expectStatus(await apiRequest(path, { key: requireServiceRoleKey() }), [403], `${path} blocked`)
+    }
+  })
+
+  test('the protected storage schema is not exposed through REST', async () => {
+    expectStatus(await apiRequest('/rest/v1/objects', {
+      key: requireServiceRoleKey(), headers: { 'Accept-Profile': 'storage' },
+    }), [406], 'storage schema is private')
+  })
+
+  test('Studio requires basic authentication', async () => {
+    expectStatus(await apiRequest('/api/platform/profile'), [401], 'Studio unauthenticated')
+    expect(config.dashboardUsername).toBeTruthy()
+    expect(config.dashboardPassword).toBeTruthy()
+    const basic = Buffer.from(`${config.dashboardUsername}:${config.dashboardPassword}`).toString('base64')
+    expectOk(await apiRequest('/api/platform/profile', { headers: { Authorization: `Basic ${basic}` } }), 'Studio authenticated')
   })
 })

@@ -9,6 +9,8 @@ services:
 
   supabase-storage:
     depends_on: !override
+      supabase-auth:
+        condition: service_healthy
       supabase-rest:
         condition: service_started
       imgproxy:

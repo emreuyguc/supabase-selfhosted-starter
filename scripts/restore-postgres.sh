@@ -20,5 +20,5 @@ if [ "${CONFIRM_RESTORE:-0}" != "1" ]; then
   exit 1
 fi
 
-docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/compose.yaml" exec -T supabase-db psql -U postgres < "$BACKUP_FILE"
+python3 "$ROOT_DIR/scripts/restore-postgres.py" "$ENV_FILE" "$BACKUP_FILE"
 echo "Restored Postgres from $BACKUP_FILE"

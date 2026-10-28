@@ -52,7 +52,7 @@ function loadEnv(): string | undefined {
 
 export const loadedEnvFile = loadEnv()
 
-if ((process.env.TEST_TLS_INSECURE ?? 'true') !== 'false') {
+if (process.env.TEST_TLS_INSECURE === 'true') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 }
 

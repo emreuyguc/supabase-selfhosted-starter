@@ -16,13 +16,13 @@ Use it together with `docs/STARTER_KIT_AI_RULES.md`. The generic rules define ho
 | Area | Source |
 |---|---|
 | Canonical stack | `compose.yaml` |
-| Full-stack variant overlay | `compose.full.yaml` |
-| External DB variant overlay | `compose.external-db.yaml` |
-| External preconfigured variant overlay | `compose.external-prebuilt.yaml` |
+| Full-stack variant overlay | `compose.internal-db.yaml` |
+| External DB variant overlay | `compose.external-db-bootstrap.yaml` |
+| External preconfigured variant overlay | `compose.external-db-existing.yaml` |
 | External S3 feature overlay | `compose.features.external-s3.yaml` |
 | Production override | `compose.prod.yaml` |
 | Env inventory | `.env.example` |
-| Variant env examples | `.env.full.example`, `.env.external-db.example`, `.env.external-prebuilt.example`, `.env.external-s3.example` |
+| Variant env examples | `.env.internal-db.example`, `.env.external-db-bootstrap.example`, `.env.external-db-existing.example`, `.env.external-s3.example` |
 | Runtime bind files | `files/` |
 | Service/image inventory | `manifest.yaml` |
 | Dokploy source config | `dokploy/config.toml` |
@@ -95,15 +95,15 @@ Variant env examples document the values required by each topology:
 
 | File | Purpose |
 |---|---|
-| `.env.full.example` | Local full-stack Supabase with local Postgres, init SQL and MinIO |
-| `.env.external-db.example` | Runtime services connected to an external database, with bootstrap SQL handled explicitly |
-| `.env.external-prebuilt.example` | Runtime services connected to a preconfigured/restored external Supabase database; no bootstrap or init SQL |
+| `.env.internal-db.example` | Local full-stack Supabase with local Postgres, init SQL and MinIO |
+| `.env.external-db-bootstrap.example` | Runtime services connected to an external database, with bootstrap SQL handled explicitly |
+| `.env.external-db-existing.example` | Runtime services connected to a preconfigured/restored external Supabase database; no bootstrap or init SQL |
 | `.env.external-s3.example` | External S3 object storage values for the external S3 feature overlay |
 
 Real env generation:
 
 ```sh
-SUPABASE_PUBLIC_URL=http://example.com ./scripts/generate-env.sh --variant full
+SUPABASE_PUBLIC_URL=http://example.com ./scripts/generate-env.sh --variant internal-db
 ```
 
 The generator:
@@ -135,31 +135,31 @@ Use Compose overlays for mutually exclusive Supabase topologies:
 
 | Variant | Compose files | Rule |
 |---|---|---|
-| `full` | `compose.yaml` + `compose.full.yaml` | Runs local Postgres, local MinIO and required init SQL/bootstrap behavior |
-| `external-db` | `compose.yaml` + `compose.external-db.yaml` | Connects to external Postgres, runs `supabase-db-bootstrap`, then starts runtime services and service migrations |
-| `external-prebuilt` | `compose.yaml` + `compose.external-prebuilt.yaml` | Connects to an already configured/restored Supabase database; local Postgres, init SQL and Realtime/Supavisor migration commands are absent, but Supavisor/pooler is still managed by this stack |
+| `internal-db` | `compose.yaml` + `compose.internal-db.yaml` | Runs local Postgres, local MinIO and required init SQL/bootstrap behavior |
+| `external-db-bootstrap` | `compose.yaml` + `compose.external-db-bootstrap.yaml` | Connects to external Postgres, runs `supabase-db-bootstrap`, then starts runtime services and service migrations |
+| `external-db-existing` | `compose.yaml` + `compose.external-db-existing.yaml` | Connects to an already configured/restored Supabase database; local Postgres, init SQL and Realtime/Supavisor migration commands are absent, but Supavisor/pooler is still managed by this stack |
 
 Use profiles only for additive optional services. Do not use profiles for mutually exclusive database/storage topology choices.
 
 External S3 is an additive feature overlay, not a main deployment variant. It disables local MinIO and `minio-createbucket`, then points Storage at an existing S3-compatible backend.
 
-Supavisor is managed by this stack in all supported DB variants. Do not assume an external pooler for `external-db` or `external-prebuilt`. If external pooler support is ever needed, it must be a separate explicit feature overlay.
+Supavisor is managed by this stack in all supported DB variants. Do not assume an external pooler for `external-db-bootstrap` or `external-db-existing`. If external pooler support is ever needed, it must be a separate explicit feature overlay.
 
-`external-db` uses `supabase-db-bootstrap` as a one-shot Compose job. If the bootstrap SQL changes, the job fails halfway, or the external database target changes, operators must explicitly recreate/rerun the bootstrap job before relying on runtime services.
+`external-db-bootstrap` uses `supabase-db-bootstrap` as a one-shot Compose job. If the bootstrap SQL changes, the job fails halfway, or the external database target changes, operators must explicitly recreate/rerun the bootstrap job before relying on runtime services.
 
 Examples:
 
 ```sh
-docker compose --env-file .env -f compose.yaml -f compose.full.yaml up -d
-docker compose --env-file .env -f compose.yaml -f compose.external-db.yaml up -d
-docker compose --env-file .env -f compose.yaml -f compose.external-prebuilt.yaml up -d
-docker compose --env-file .env -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.internal-db.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.external-db-bootstrap.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.external-db-existing.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.external-db-bootstrap.yaml -f compose.features.external-s3.yaml up -d
 ```
 
 Production policy remains an additional overlay:
 
 ```sh
-docker compose --env-file .env -f compose.yaml -f compose.full.yaml -f compose.prod.yaml up -d
+docker compose --env-file .env -f compose.yaml -f compose.internal-db.yaml -f compose.prod.yaml up -d
 ```
 
 Dokploy support should render one concrete import artifact per supported variant. Users should import the matching generated artifact instead of editing Compose or JSON by hand.
@@ -168,7 +168,7 @@ Dokploy support should render one concrete import artifact per supported variant
 
 `scripts/validate.sh` must validate:
 
-- current root/full Compose syntax;
+- current root/internal-db Compose syntax;
 - supported variant overlay syntax;
 - production override syntax for supported variants;
 - Dokploy import JSON;
@@ -214,37 +214,37 @@ npm --prefix tests/runtime run typecheck
 Dokploy has generated import artifacts:
 
 ```text
-dokploy/templates/full-local.json
-dokploy/templates/full-external-s3.json
-dokploy/templates/external-db-local.json
-dokploy/templates/external-db-external-s3.json
-dokploy/templates/external-prebuilt-local.json
-dokploy/templates/external-prebuilt-external-s3.json
+dokploy/templates/internal-db-minio.json
+dokploy/templates/internal-db-external-s3.json
+dokploy/templates/external-db-bootstrap-minio.json
+dokploy/templates/external-db-bootstrap-external-s3.json
+dokploy/templates/external-db-existing-minio.json
+dokploy/templates/external-db-existing-external-s3.json
 ```
 
 Render it with:
 
 ```sh
 make -C dokploy render-all
-make -C dokploy render-template VARIANT=external-db STORAGE=external-s3
+make -C dokploy render-template VARIANT=external-db-bootstrap STORAGE=external-s3
 ```
 
 The renderer:
 
 - reads `compose.yaml`;
-- applies supported variant topology transforms;
+- delegates variant/feature/production overlay merging to Docker Compose;
 - reads `dokploy/config.toml`;
 - rewrites `./files/...` to `../files/...`;
-- embeds `files/` content into `[[config.mounts]]`;
-- runs static validation.
+- embeds `files/` content into escaped TOML `[[config.mounts]]` strings;
+- runs static validation, semantic parity and mount-byte checks.
 
 Operational Dokploy usage is documented in `dokploy/README.md`.
 
 ### Coolify
 
-This repository does not keep a separate Coolify artifact.
+This repository exports the selected Compose topology with `scripts/render-compose.py`; it does not provide a Coolify catalog template.
 
-Use root `compose.yaml` as the manual/user-defined Compose base. This is not a Coolify one-click catalog template. Operators must ensure `files/` exists relative to the deployment bundle or adapt bind paths on the target platform.
+Use root `compose.deploy.yaml` exported from the canonical overlays as the Compose definition. This is not a Coolify one-click catalog template. Operators must ensure `files/` exists relative to the deployment bundle or adapt bind paths on the target platform.
 
 ## Branch and versioning policy
 
