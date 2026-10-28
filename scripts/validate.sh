@@ -18,6 +18,16 @@ if manifest.get("canonical_compose") != base_compose:
 if not Path(base_compose).exists():
     raise SystemExit(f"Missing base compose file: {base_compose}")
 
+services = yaml.safe_load(Path(base_compose).read_text())["services"]
+for name, entry in manifest["services"].items():
+    if services.get(name, {}).get("image") != entry["image"]:
+        raise SystemExit(f"Manifest image differs from Compose: {name}")
+if services["minio-createbucket"]["image"] != services["supabase-minio"]["image"]:
+    raise SystemExit("MinIO bootstrap must use the pinned server image containing mc")
+rest_env = services["supabase-rest"]["environment"]
+if any(item.startswith("PGRST_APP_SETTINGS_JWT_SECRET=") for item in rest_env):
+    raise SystemExit("PostgREST must not expose the signing secret as an app setting")
+
 for name, variant in manifest.get("variants", {}).items():
     compose_files = variant.get("compose_files", [])
     if not compose_files or compose_files[0] != base_compose:
@@ -37,59 +47,59 @@ PY
 echo "Validating root compose..."
 docker compose --env-file .env.example -f compose.yaml config --quiet
 
-echo "Validating full variant compose..."
-docker compose --env-file .env.full.example -f compose.yaml -f compose.full.yaml config --quiet
+echo "Validating internal DB variant compose..."
+docker compose --env-file .env.internal-db.example -f compose.yaml -f compose.internal-db.yaml config --quiet
 
 if [ -f compose.prod.yaml ]; then
   echo "Validating production compose override..."
   docker compose --env-file .env.example -f compose.yaml -f compose.prod.yaml config --quiet
-  docker compose --env-file .env.full.example -f compose.yaml -f compose.full.yaml -f compose.prod.yaml config --quiet
+  docker compose --env-file .env.internal-db.example -f compose.yaml -f compose.internal-db.yaml -f compose.prod.yaml config --quiet
 fi
 
 echo "Validating external DB variant compose..."
-docker compose --env-file .env.external-db.example -f compose.yaml -f compose.external-db.yaml config --quiet
-if docker compose --env-file .env.external-db.example -f compose.yaml -f compose.external-db.yaml config --services | grep -qx supabase-db; then
-  echo "external-db variant must not activate supabase-db" >&2
+docker compose --env-file .env.external-db-bootstrap.example -f compose.yaml -f compose.external-db-bootstrap.yaml config --quiet
+if docker compose --env-file .env.external-db-bootstrap.example -f compose.yaml -f compose.external-db-bootstrap.yaml config --services | grep -qx supabase-db; then
+  echo "external-db-bootstrap variant must not activate supabase-db" >&2
   exit 1
 fi
-if ! docker compose --env-file .env.external-db.example -f compose.yaml -f compose.external-db.yaml config --services | grep -qx supabase-db-bootstrap; then
-  echo "external-db variant must activate supabase-db-bootstrap" >&2
+if ! docker compose --env-file .env.external-db-bootstrap.example -f compose.yaml -f compose.external-db-bootstrap.yaml config --services | grep -qx supabase-db-bootstrap; then
+  echo "external-db-bootstrap variant must activate supabase-db-bootstrap" >&2
   exit 1
 fi
 
-echo "Validating external prebuilt variant compose..."
-docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --quiet
-if docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --services | grep -qx supabase-db; then
-  echo "external-prebuilt variant must not activate supabase-db" >&2
+echo "Validating existing external DB variant compose..."
+docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml config --quiet
+if docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml config --services | grep -qx supabase-db; then
+  echo "external-db-existing variant must not activate supabase-db" >&2
   exit 1
 fi
-if docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --services | grep -qx supabase-db-bootstrap; then
-  echo "external-prebuilt variant must not activate supabase-db-bootstrap" >&2
+if docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml config --services | grep -qx supabase-db-bootstrap; then
+  echo "external-db-existing variant must not activate supabase-db-bootstrap" >&2
   exit 1
 fi
-if ! docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config --services | grep -qx supabase-supavisor; then
-  echo "external-prebuilt variant must keep managed supabase-supavisor active" >&2
+if ! docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml config --services | grep -qx supabase-supavisor; then
+  echo "external-db-existing variant must keep managed supabase-supavisor active" >&2
   exit 1
 fi
-if docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml config | grep -Eq '/app/bin/migrate|supavisor eval'; then
-  echo "external-prebuilt variant must not run Supavisor/Realtime migration commands" >&2
+if docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml config | grep -Eq '/app/bin/migrate|supavisor eval'; then
+  echo "external-db-existing variant must not run Supavisor/Realtime migration commands" >&2
   exit 1
 fi
 
 echo "Validating external S3 feature overlay..."
-docker compose --env-file .env.full.example --env-file .env.external-s3.example -f compose.yaml -f compose.full.yaml -f compose.features.external-s3.yaml config --quiet
-if docker compose --env-file .env.full.example --env-file .env.external-s3.example -f compose.yaml -f compose.full.yaml -f compose.features.external-s3.yaml config --services | grep -Eq '^(supabase-minio|minio-createbucket)$'; then
+docker compose --env-file .env.internal-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.internal-db.yaml -f compose.features.external-s3.yaml config --quiet
+if docker compose --env-file .env.internal-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.internal-db.yaml -f compose.features.external-s3.yaml config --services | grep -Eq '^(supabase-minio|minio-createbucket)$'; then
   echo "external-s3 feature must not activate local MinIO services" >&2
   exit 1
 fi
-docker compose --env-file .env.external-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml config --quiet
-docker compose --env-file .env.external-prebuilt.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-prebuilt.yaml -f compose.features.external-s3.yaml config --quiet
+docker compose --env-file .env.external-db-bootstrap.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db-bootstrap.yaml -f compose.features.external-s3.yaml config --quiet
+docker compose --env-file .env.external-db-existing.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db-existing.yaml -f compose.features.external-s3.yaml config --quiet
 
 if [ -f compose.prod.yaml ]; then
-  docker compose --env-file .env.external-db.example -f compose.yaml -f compose.external-db.yaml -f compose.prod.yaml config --quiet
-  docker compose --env-file .env.external-prebuilt.example -f compose.yaml -f compose.external-prebuilt.yaml -f compose.prod.yaml config --quiet
-  docker compose --env-file .env.external-db.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db.yaml -f compose.features.external-s3.yaml -f compose.prod.yaml config --quiet
-  docker compose --env-file .env.external-prebuilt.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-prebuilt.yaml -f compose.features.external-s3.yaml -f compose.prod.yaml config --quiet
+  docker compose --env-file .env.external-db-bootstrap.example -f compose.yaml -f compose.external-db-bootstrap.yaml -f compose.prod.yaml config --quiet
+  docker compose --env-file .env.external-db-existing.example -f compose.yaml -f compose.external-db-existing.yaml -f compose.prod.yaml config --quiet
+  docker compose --env-file .env.external-db-bootstrap.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db-bootstrap.yaml -f compose.features.external-s3.yaml -f compose.prod.yaml config --quiet
+  docker compose --env-file .env.external-db-existing.example --env-file .env.external-s3.example -f compose.yaml -f compose.external-db-existing.yaml -f compose.features.external-s3.yaml -f compose.prod.yaml config --quiet
 fi
 
 echo "Validating README generated summary..."
@@ -102,12 +112,12 @@ from pathlib import Path
 import yaml
 
 templates = [
-    Path("dokploy/templates/full-local.json"),
-    Path("dokploy/templates/full-external-s3.json"),
-    Path("dokploy/templates/external-db-local.json"),
-    Path("dokploy/templates/external-db-external-s3.json"),
-    Path("dokploy/templates/external-prebuilt-local.json"),
-    Path("dokploy/templates/external-prebuilt-external-s3.json"),
+    Path("dokploy/templates/internal-db-minio.json"),
+    Path("dokploy/templates/internal-db-external-s3.json"),
+    Path("dokploy/templates/external-db-bootstrap-minio.json"),
+    Path("dokploy/templates/external-db-bootstrap-external-s3.json"),
+    Path("dokploy/templates/external-db-existing-minio.json"),
+    Path("dokploy/templates/external-db-existing-external-s3.json"),
 ]
 missing_templates = [str(path) for path in templates if not path.exists()]
 if missing_templates:
@@ -119,15 +129,15 @@ for template in templates:
         raise SystemExit(f"{template} must contain compose and config")
     compose = yaml.safe_load(data["compose"])
     services = compose.get("services", {})
-    if template.name in {"full-local.json", "full-external-s3.json"} and "supabase-db" not in services:
+    if template.name in {"internal-db-minio.json", "internal-db-external-s3.json"} and "supabase-db" not in services:
         raise SystemExit(f"{template} must include supabase-db")
-    if template.name in {"external-db-local.json", "external-db-external-s3.json", "external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db" in services:
+    if template.name in {"external-db-bootstrap-minio.json", "external-db-bootstrap-external-s3.json", "external-db-existing-minio.json", "external-db-existing-external-s3.json"} and "supabase-db" in services:
         raise SystemExit(f"{template} must not include supabase-db")
-    if template.name in {"external-db-local.json", "external-db-external-s3.json"} and "supabase-db-bootstrap" not in services:
+    if template.name in {"external-db-bootstrap-minio.json", "external-db-bootstrap-external-s3.json"} and "supabase-db-bootstrap" not in services:
         raise SystemExit(f"{template} must include supabase-db-bootstrap")
-    if template.name in {"external-prebuilt-local.json", "external-prebuilt-external-s3.json"} and "supabase-db-bootstrap" in services:
+    if template.name in {"external-db-existing-minio.json", "external-db-existing-external-s3.json"} and "supabase-db-bootstrap" in services:
         raise SystemExit(f"{template} must not include supabase-db-bootstrap")
-    if template.name in {"external-prebuilt-local.json", "external-prebuilt-external-s3.json"}:
+    if template.name in {"external-db-existing-minio.json", "external-db-existing-external-s3.json"}:
         if "supabase-supavisor" not in services:
             raise SystemExit(f"{template} must keep managed supabase-supavisor")
         supavisor_command = str(services["supabase-supavisor"].get("command", ""))
@@ -241,5 +251,7 @@ print("Dokploy import JSON, embedded compose and required files are valid.")
 PY
 
 sh -n files/volumes/db-bootstrap/bootstrap-external-db.sh
+
+python3 scripts/validate-models.py
 
 echo "Validation complete."

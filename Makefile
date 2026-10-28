@@ -1,4 +1,4 @@
-.PHONY: validate render-readme render-dokploy generate-env backup-postgres backup-minio test-runtime typecheck-runtime test-smoke
+.PHONY: validate render-readme render-dokploy generate-env backup-postgres backup-minio test-runtime typecheck-runtime test-smoke test-matrix test-gateway-edge
 
 validate:
 	./scripts/validate.sh
@@ -26,3 +26,9 @@ typecheck-runtime:
 
 test-smoke:
 	npm --prefix tests/runtime test
+
+test-matrix:
+	python3 tests/runtime/matrix.py
+
+test-gateway-edge:
+	python3 tests/runtime/gateway-edge-check.py

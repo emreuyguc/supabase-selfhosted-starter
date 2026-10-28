@@ -48,6 +48,8 @@ services:
   supabase-storage:
     restart: unless-stopped
     logging: *prod-logging
+    environment:
+    - NODE_ENV=production
 
   imgproxy:
     restart: unless-stopped

@@ -37,6 +37,15 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_storage_admin') THEN
     CREATE ROLE supabase_storage_admin LOGIN NOINHERIT CREATEROLE NOREPLICATION;
   END IF;
+
+  -- Realtime's tenant-schema dump sets restricted role attributes. Do that
+  -- once with bootstrap privileges instead of making the runtime user superuser.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_realtime_admin') THEN
+    CREATE ROLE supabase_realtime_admin NOLOGIN NOINHERIT NOCREATEROLE NOCREATEDB NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dashboard_user') THEN
+    CREATE ROLE dashboard_user NOLOGIN NOINHERIT;
+  END IF;
 END
 $$;
 
@@ -49,3 +58,7 @@ ALTER ROLE supabase_storage_admin WITH PASSWORD :'pgpass';
 
 GRANT anon, authenticated, service_role TO authenticator;
 GRANT supabase_auth_admin, supabase_functions_admin, supabase_storage_admin TO supabase_admin;
+GRANT anon, authenticated, service_role TO supabase_realtime_admin;
+GRANT supabase_realtime_admin TO supabase_admin;
+ALTER ROLE supabase_realtime_admin SET search_path TO public, extensions, realtime;
+GRANT SET ON PARAMETER log_min_messages TO supabase_realtime_admin;

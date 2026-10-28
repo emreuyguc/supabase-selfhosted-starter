@@ -3,6 +3,7 @@ name: Validate
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -11,6 +12,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install validation dependencies
+        run: python3 -m pip install PyYAML
 
       - name: Show tool versions
         run: |
@@ -48,7 +57,8 @@ jobs:
 
       - name: Ensure rendered artifacts are committed
         run: |
-          git diff --exit-code -- dokploy/template.json README.md
+          git diff --exit-code -- dokploy/templates/ README.md
+          test -z "$(git ls-files --others --exclude-standard -- dokploy/templates/)"
 
       - name: Validate static artifacts
         run: |

@@ -7,10 +7,18 @@ class SocketReader {
   private chunks: Buffer[] = []
   private length = 0
   private waiters: Array<() => void> = []
+  private failure: Error | undefined
 
   constructor(private readonly socket: net.Socket | tls.TLSSocket, initial?: Buffer) {
     if (initial?.length) this.push(initial)
     this.socket.on('data', (chunk: Buffer) => this.push(chunk))
+    this.socket.on('error', (error) => this.fail(error))
+    this.socket.on('close', () => this.fail(new Error('Realtime socket closed')))
+  }
+
+  private fail(error: Error): void {
+    this.failure = error
+    for (const waiter of this.waiters.splice(0)) waiter()
   }
 
   private push(chunk: Buffer): void {
@@ -21,6 +29,7 @@ class SocketReader {
 
   private async waitForData(timeoutMs: number): Promise<void> {
     if (this.length > 0) return
+    if (this.failure) throw this.failure
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiters = this.waiters.filter((waiter) => waiter !== done)
@@ -32,6 +41,7 @@ class SocketReader {
       }
       this.waiters.push(done)
     })
+    if (this.failure && this.length === 0) throw this.failure
   }
 
   async read(length: number, timeoutMs = 8_000): Promise<Buffer> {
@@ -106,31 +116,47 @@ function sendTextFrame(socket: net.Socket | tls.TLSSocket, text: string): void {
   socket.write(Buffer.concat([Buffer.from(header), mask, masked]))
 }
 
-async function readTextFrame(reader: SocketReader): Promise<string> {
-  const head = await reader.read(2)
+async function readTextFrame(reader: SocketReader, timeoutMs = 8_000): Promise<string> {
+  const head = await reader.read(2, timeoutMs)
   const opcode = head[0] & 0x0f
   let length = head[1] & 0x7f
 
   if (length === 126) {
-    length = (await reader.read(2)).readUInt16BE(0)
+    length = (await reader.read(2, timeoutMs)).readUInt16BE(0)
   } else if (length === 127) {
-    const big = (await reader.read(8)).readBigUInt64BE(0)
+    const big = (await reader.read(8, timeoutMs)).readBigUInt64BE(0)
     if (big > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('WebSocket frame is too large')
     length = Number(big)
   }
 
-  const payload = await reader.read(length)
+  const payload = await reader.read(length, timeoutMs)
+  if (opcode === 8) throw new Error('Realtime server closed the WebSocket')
   if (opcode !== 1) return `<opcode ${opcode} ${length} bytes>`
   return payload.toString('utf8')
 }
 
-export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ statusLine: string; message: string }> {
+export type RealtimePayload = {
+  status?: string
+  extension?: string
+  message?: string
+  response?: { postgres_changes?: Array<{ id: number }> }
+  ids?: number[]
+  data?: {
+    type: string
+    table: string
+    record?: Record<string, unknown>
+    old_record?: Record<string, unknown>
+  }
+}
+export type RealtimeMessage = [string | null, string | null, string, string, RealtimePayload]
+
+export async function openRealtime(baseUrl: string, anonKey: string) {
   const parsed = new URL(baseUrl)
   const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
   const host = parsed.hostname
   const socket =
     parsed.protocol === 'https:'
-      ? tls.connect({ host, port, servername: host, rejectUnauthorized: false })
+      ? tls.connect({ host, port, servername: host, rejectUnauthorized: process.env.TEST_TLS_INSECURE !== 'true' })
       : net.connect({ host, port })
 
   await new Promise<void>((resolve, reject) => {
@@ -146,7 +172,7 @@ export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ 
   const hostHeader = parsed.port ? `${host}:${port}` : host
   socket.write(
     [
-      `GET /realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=1.0.0 HTTP/1.1`,
+      `GET /realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=2.0.0 HTTP/1.1`,
       `Host: ${hostHeader}`,
       'Upgrade: websocket',
       'Connection: Upgrade',
@@ -166,6 +192,19 @@ export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ 
   }
 
   const reader = new SocketReader(socket, leftover)
+  const heartbeat = setInterval(() => sendTextFrame(socket, JSON.stringify([null, 'heartbeat', 'phoenix', 'heartbeat', {}])), 15_000)
+  return {
+    statusLine,
+    send(message: unknown[]) { sendTextFrame(socket, JSON.stringify(message)) },
+    async receive(timeoutMs = 8_000): Promise<RealtimeMessage> {
+      return JSON.parse(await readTextFrame(reader, timeoutMs)) as RealtimeMessage
+    },
+    close() { clearInterval(heartbeat); socket.destroy() },
+  }
+}
+
+export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ statusLine: string; message: string }> {
+  const client = await openRealtime(baseUrl, anonKey)
   const join = [
     '1',
     '1',
@@ -181,8 +220,11 @@ export async function realtimeJoin(baseUrl: string, anonKey: string): Promise<{ 
     },
   ]
 
-  sendTextFrame(socket, JSON.stringify(join))
-  const message = await readTextFrame(reader)
-  socket.destroy()
-  return { statusLine, message }
+  try {
+    client.send(join)
+    const message = JSON.stringify(await client.receive())
+    return { statusLine: client.statusLine, message }
+  } finally {
+    client.close()
+  }
 }

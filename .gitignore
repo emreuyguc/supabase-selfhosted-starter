@@ -29,3 +29,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Local audit credentials, logs and test fixtures
+.scratch/
+compose.deploy.yaml
+__pycache__/
+*.pyc

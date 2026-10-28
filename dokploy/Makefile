@@ -1,14 +1,14 @@
-VARIANT ?= full
-STORAGE ?= local
-OUTPUT ?= dokploy/templates/$(VARIANT)-$(STORAGE).json
+VARIANT ?= internal-db
+STORAGE ?= minio
+OUTPUT ?=
 
 .PHONY: render render-all render-template validate
 
 render:
-	../scripts/render-dokploy.sh --variant $(VARIANT) --storage $(STORAGE) --output $(OUTPUT)
+	../scripts/render-dokploy.sh --variant "$(VARIANT)" --storage "$(STORAGE)" $(if $(OUTPUT),--output "$(OUTPUT)")
 
 render-template:
-	../scripts/render-dokploy.sh --variant $(VARIANT) --storage $(STORAGE) --output dokploy/templates/$(VARIANT)-$(STORAGE).json
+	../scripts/render-dokploy.sh --variant "$(VARIANT)" --storage "$(STORAGE)"
 
 render-all:
 	../scripts/render-dokploy.sh --all
