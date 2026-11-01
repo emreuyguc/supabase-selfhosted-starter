@@ -48,6 +48,14 @@ def compose_model(root, variant, storage, production=True):
 def dokploy_model(model):
     data = copy.deepcopy(model)
     data['name'] = '${CONTAINER_PREFIX:-supabase}'
+    # Dokploy applications/databases run as Swarm services. A local bridge,
+    # even attachable, cannot be shared with those services. Use a distinct
+    # name so upgrades do not collide with the previously created bridge.
+    data.setdefault('networks', {})['default'] = {
+        'name': '${COMPOSE_PROJECT_NAME}_supabase-overlay',
+        'driver': 'overlay',
+        'attachable': True,
+    }
     data['services'] = {k: v for k, v in data['services'].items() if not v.get('profiles')}
     used_volumes = set()
     for service in data['services'].values():
