@@ -43,6 +43,11 @@ def check_independent_source(actual, variant, storage):
     used = {m['source'] for s in source['services'].values() for m in s.get('volumes', []) if m['type'] == 'volume'}
     source['volumes'] = {k: v for k, v in source.get('volumes', {}).items() if k in used}
     restored = copy.deepcopy(actual)
+    assert restored['networks']['default'] == {
+        'name': '${COMPOSE_PROJECT_NAME}_supabase-overlay',
+        'driver': 'overlay', 'attachable': True,
+    }, 'Dokploy requires an attachable Swarm overlay network'
+    restored['networks']['default'] = source['networks']['default']
     restored['name'] = '${CONTAINER_PREFIX}'
     for service in restored['services'].values():
         if 'container_name' in service:
@@ -91,10 +96,16 @@ for variant in VARIANTS:
         expected = dokploy_model(compose_model(ROOT, variant, storage))
         assert actual == expected, f'{path.name}: differs from canonical Compose overlays'
         check_independent_source(actual, variant, storage)
+        assert actual['networks']['default'] == {
+            'name': '${COMPOSE_PROJECT_NAME}_supabase-overlay',
+            'driver': 'overlay', 'attachable': True,
+        }, f'{path.name}: missing deployment-scoped attachable network'
         config = parse_toml(artifact['config'])['config']
         env = dict(item.split('=', 1) for item in config['env'])
         assert len(env) == len(config['env']), f'{path.name}: duplicate env key'
         references = set(re.findall(r'\$\{([A-Z][A-Z0-9_]*)', artifact['compose']))
+        # Compose supplies its resolved project name, including Dokploy's prefix.
+        references.discard('COMPOSE_PROJECT_NAME')
         assert references <= env.keys(), f'{path.name}: missing env keys {references - env.keys()}'
         mounts = {m['filePath']: m['content'] for m in config['mounts']}
         assert len(mounts) == len(config['mounts']), f'{path.name}: duplicate file mount'
@@ -145,3 +156,17 @@ with tempfile.TemporaryDirectory(prefix='dokploy-isolation-', dir=scratch) as di
         os.environ.clear()
         os.environ.update(before)
 print('PASS separate fixture .env and external-DB/S3 profile isolation')
+
+names = []
+for project in ('starter-network-a', 'starter-network-b'):
+    result = subprocess.run([
+        'docker', 'compose', '-p', project, '--env-file', str(ROOT / '.env.internal-db.example'),
+        '-f', str(ROOT / 'compose.yaml'), '-f', str(ROOT / 'compose.internal-db.yaml'),
+        'config', '--format', 'json',
+    ], text=True, capture_output=True, check=True)
+    network = json.loads(result.stdout)['networks']['default']
+    assert network['attachable'] is True
+    assert network['name'] == project + '_supabase'
+    names.append(network['name'])
+assert len(set(names)) == 2
+print('PASS attachable network names stay distinct across Compose projects')

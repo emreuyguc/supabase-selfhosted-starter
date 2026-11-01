@@ -561,6 +561,11 @@ services:
       source: ./files/volumes/pooler/pooler.exs
       target: /etc/pooler/pooler.exs
       read_only: true
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME}_supabase
+    attachable: true
+
 volumes:
   supabase-db-data: null
   supabase-db-config: null

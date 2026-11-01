@@ -142,7 +142,7 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
     if external_db and bootstrap:
         text = text.replace(
             'postgres_host = "db.example.com"',
-            'postgres_host = "db.example.com"\npostgres_bootstrap_password = "replace_with_external_postgres_admin_password"',
+            'postgres_host = "db.example.com"\npostgres_bootstrap_user = "postgres"\npostgres_bootstrap_password = "replace_with_external_postgres_admin_password"',
         )
     if external_s3:
         text = text.replace(
@@ -161,7 +161,7 @@ def variant_config(config_text, external_db=False, bootstrap=False, external_s3=
     if bootstrap:
         text = text.replace(
             '"POSTGRES_PORT=5432"',
-            '"POSTGRES_PORT=5432",\n"POSTGRES_DB_OWNER=supabase_admin",\n"POSTGRES_BOOTSTRAP_DB=postgres",\n"POSTGRES_BOOTSTRAP_USER=postgres",\n"POSTGRES_BOOTSTRAP_PASSWORD=${postgres_bootstrap_password}"',
+            '"POSTGRES_PORT=5432",\n"POSTGRES_DB_OWNER=supabase_admin",\n"POSTGRES_BOOTSTRAP_DB=postgres",\n"POSTGRES_BOOTSTRAP_USER=${postgres_bootstrap_user}",\n"POSTGRES_BOOTSTRAP_PASSWORD=${postgres_bootstrap_password}"',
         )
     if external_s3:
         text = text.replace(
