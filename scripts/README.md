@@ -83,6 +83,20 @@ Optional generator inputs:
 | `POSTGRES_BOOTSTRAP_USER` | `postgres`, only written for `external-db-bootstrap` |
 | `STORAGE_S3_FORCE_PATH_STYLE` | `true`, only written for `external-s3` |
 
+External bootstrap requires a real PostgreSQL superuser, including for extension
+installation hooks and event trigger creation. Check the external server with
+`SELECT rolname, rolsuper FROM pg_roles WHERE rolname IN ('postgres', 'supabase_admin');`.
+On Supabase images, `postgres` may be restricted and `supabase_admin` may be the
+superuser. Set `POSTGRES_BOOTSTRAP_USER` and `POSTGRES_BOOTSTRAP_PASSWORD` to that
+server's superuser credentials, then rerun the bootstrap. These are separate from
+runtime credentials. A `permission denied for function pg_read_file` error during
+`CREATE EXTENSION` can indicate restricted bootstrap credentials. Providers that
+do not expose a real superuser cannot run this bootstrap path.
+
+Bootstrap clears `session_preload_libraries` for its own connections so Supabase
+image defaults do not load `supautils` and redirect extension hooks to another
+role. It does not change server configuration or runtime service sessions.
+
 ## Backup and restore
 
 Backups are written to `backups/`, which is ignored by git.

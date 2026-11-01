@@ -132,7 +132,7 @@ try:
                 'ports': [f'127.0.0.1:{PORT}:8443'],
                 'depends_on': {'supabase-kong': {'condition': 'service_healthy'}},
                 'healthcheck': {'test': ['CMD', 'python', '-c', "import socket,ssl; s=ssl.create_default_context(cafile='/tls/ca.crt').wrap_socket(socket.create_connection(('127.0.0.1',8443)),server_hostname='localhost'); s.close()"], 'interval': '2s', 'timeout': '5s', 'retries': 20},
-            }}, 'networks': {'default': {'external': True, 'name': PREFIX + '-deps_default'}}}))
+            }}, 'networks': {'default': {'external': True, 'attachable': False, 'name': PREFIX + '-deps_default'}}}))
             files = [ROOT / 'compose.yaml', ROOT / f'compose.{variant}.yaml']
             if storage == 'external-s3':
                 files.append(ROOT / 'compose.features.external-s3.yaml')

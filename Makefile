@@ -32,3 +32,7 @@ test-matrix:
 
 test-gateway-edge:
 	python3 tests/runtime/gateway-edge-check.py
+
+.PHONY: test-bootstrap
+test-bootstrap:
+	python3 tests/runtime/bootstrap-check.py

@@ -108,6 +108,13 @@ Set `TEST_TLS_INSECURE=true` only for an intentional self-signed test endpoint.
 
 ## Disposable scenario matrix
 
+Run the focused external-bootstrap regression with `make test-bootstrap`. It
+creates a disposable local Postgres container with Supabase `supautils` session
+hooks, reproduces the `pg_read_file` failure, runs bootstrap twice, and verifies
+that server preload settings and runtime role privileges stay unchanged. A
+non-superuser bootstrap login must fail before any SQL bootstrap file runs.
+No remote server, existing `.env`, database volume or S3 service is used.
+
 ```sh
 make test-matrix
 ```

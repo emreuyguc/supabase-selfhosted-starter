@@ -102,7 +102,7 @@ exec gosu postgres postgres -D /fixture-db -c config_file=/etc/postgresql/postgr
     fixturefile.write_text(json.dumps(fixture))
     cmd = compose(target, envfile, [fixturefile])
     overlay = json.loads((source_env.parent / 'internal-db-minio.json').read_text())
-    overlay['networks'] = {'default': {'external': True, 'name': target + '_default'}}
+    overlay['networks'] = {'default': {'external': True, 'attachable': False, 'name': target + '_default'}}
     overlayfile = case / 'restored-ingress.json'
     overlayfile.write_text(json.dumps(overlay))
     runtime = compose(target, envfile, [ROOT / 'compose.yaml', ROOT / 'compose.external-db-existing.yaml', ROOT / 'compose.prod.yaml', overlayfile])

@@ -57,6 +57,38 @@ Then import the template matching the target topology:
 
 For `external-db-bootstrap` templates, the external Postgres provider must support `pg_net`, `pg_graphql` and `pg_cron`, and the bootstrap job is expected to run once before runtime services are considered ready. For `external-db-existing` templates, the database must already contain the restored/configured Supabase DB-side state.
 
+Bootstrap requires an actual PostgreSQL superuser. Set `postgres_bootstrap_user`
+(default `postgres`) and `postgres_bootstrap_password` to the external server's
+bootstrap credentials. Runtime credentials remain separate. Supabase Postgres
+images can preload `supautils` and delegate extension hooks to `supabase_admin`;
+if that role is not a superuser, extension creation can fail on `pg_read_file`
+even when the connecting `postgres` role is a superuser. The bootstrap script
+clears session preload libraries only for its own connections. If `supautils`
+is globally preloaded with an invalid delegation role, the external DB
+administrator must correct that server configuration.
+
+For an already imported Dokploy application, repository/template changes do not
+automatically replace the application's saved file mounts. Update the saved
+`/volumes/db-bootstrap/bootstrap-external-db.sh` file mount with the contents of
+`files/volumes/db-bootstrap/bootstrap-external-db.sh`, then redeploy. Keep the
+existing secrets, database and S3 settings; no database reset is needed. New
+imports use the regenerated JSON templates directly.
+
+Dokploy services use an attachable **overlay** network named
+`<compose-project>_supabase-overlay`. Ordinary Compose deployments use a local
+bridge named `<compose-project>_supabase`; `attachable` alone does not make a
+bridge usable by Swarm services or available in their network selector.
+Docker Compose resolves `COMPOSE_PROJECT_NAME` from the actual project (including
+Dokploy's deployment prefix), so separate deployments get separate networks.
+Additional containers can join that network; an independently deployed external
+Postgres must share a reachable network or use a reachable hostname/IP.
+Connect separately deployed PostgreSQL and S3 services to the overlay through
+their Dokploy network settings and redeploy those services before bootstrap.
+Use their hostname/alias on that network. Sync the updated Compose definition
+into an existing Supabase application before deploying. The new overlay name
+avoids colliding with an older bridge; it does not migrate external services or
+remove old networks automatically. Dokploy hosts must have Swarm enabled.
+
 ## Source-of-truth
 
 Do not edit generated JSON templates by hand.
@@ -69,6 +101,7 @@ The renderer:
 - applies supported variant topology transforms;
 - reads `dokploy/config.toml`;
 - rewrites root `./files/...` bind paths to Dokploy `../files/...`;
+- uses a deployment-scoped attachable overlay for Swarm service connectivity;
 - embeds `files/` content into Dokploy `[[config.mounts]]`;
 - runs static validation.
 
